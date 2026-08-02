@@ -1,0 +1,23 @@
+const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { buildEmbed, success, error } = require('../../utils/embed');
+const { getConfig } = require('../../utils/guildConfig');
+
+module.exports = {
+  data: new SlashCommandBuilder()
+    .setName('activitycheck')
+    .setDescription('Send an activity check ping to a role')
+    .addRoleOption(o => o.setName('role').setDescription('Role to ping').setRequired(true))
+    .addStringOption(o => o.setName('message').setDescription('Custom message to include'))
+    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDMPermission(false),
+
+  async execute(interaction) {
+    const role = interaction.options.getRole('role');
+    const customMsg = interaction.options.getString('message') || 'Please react to confirm your activity!';
+    if (!role.mentionable) { try { await role.setMentionable(true); } catch (_) {} }
+    const embed = buildEmbed({ color: 'info', title: '📢 Activity Check', description: `${role}\n\n${customMsg}\n\nReact with ✅ to confirm your activity!`, footer: `Activity check by ${interaction.user.tag}`, timestamp: Date.now() });
+    const msg = await interaction.channel.send({ embeds: [embed] });
+    await msg.react('✅');
+    await interaction.reply({ embeds: [buildEmbed({ color: 'success', title: '✅ Activity Check Sent', description: 'The activity check has been posted.' })], ephemeral: true });
+  },
+};
