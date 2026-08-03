@@ -8,7 +8,8 @@ module.exports = {
     .setDescription('Create an order embed with stickers and an Order button')
     .addStringOption(o => o.setName('title').setDescription('Embed title').setRequired(true))
     .addStringOption(o => o.setName('description').setDescription('Embed description (single line)').setRequired(true))
-    .addAttachmentOption(o => o.setName('sticker').setDescription('Sticker/image to include'))
+    .addAttachmentOption(o => o.setName('sticker').setDescription('First sticker/image'))
+    .addAttachmentOption(o => o.setName('sticker2').setDescription('Second sticker/image'))
     .addChannelOption(o => o.setName('channel').setDescription('Channel to send to (default: current channel)'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .setDMPermission(false),
@@ -17,6 +18,7 @@ module.exports = {
     const title = interaction.options.getString('title');
     const desc = interaction.options.getString('description');
     const sticker = interaction.options.getAttachment('sticker');
+    const sticker2 = interaction.options.getAttachment('sticker2');
     const channel = interaction.options.getChannel('channel') || interaction.channel;
 
     const cfg = await getConfig(interaction.guild.id);
@@ -24,10 +26,19 @@ module.exports = {
       return error(interaction, 'Not Configured', 'Set the orders channel with /setchannel type:Orders Channel.');
     }
 
-    const embed = new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2');
-    if (sticker && sticker.contentType?.startsWith('image/')) embed.setImage(sticker.url);
+    const embed = new EmbedBuilder()
+      .setTitle(title)
+      .setDescription(desc)
+      .setColor('#5865F2');
 
-    const button = new ButtonBuilder().setCustomId('order_create').setLabel('Order').setStyle(ButtonStyle.Primary);
+    if (sticker && sticker.contentType?.startsWith('image/')) embed.setImage(sticker.url);
+    if (sticker2 && sticker2.contentType?.startsWith('image/')) embed.setThumbnail(sticker2.url);
+
+    const button = new ButtonBuilder()
+      .setCustomId('order_create')
+      .setLabel('Order')
+      .setStyle(ButtonStyle.Primary);
+
     const row = new ActionRowBuilder().addComponents(button);
 
     await channel.send({ embeds: [embed], components: [row] });
