@@ -53,9 +53,13 @@ async function pickWinners(msg, giveaway, isReroll = false) {
     color: 'giveaway',
     title: `🎉 ${giveaway.prize} (ENDED)`,
     description: [
+      `​`,
       `**Winner(s):** ${winnerMentions}`,
+      `​`,
       `**Hosted By:** <@${giveaway.hostId}>`,
+      `​`,
       `**Participants:** ${entrants.length}`,
+      `​`,
       isReroll ? '*Re-rolled.*' : '',
     ].join('\n'),
   });

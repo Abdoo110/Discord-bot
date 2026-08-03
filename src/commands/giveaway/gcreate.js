@@ -32,9 +32,13 @@ module.exports = {
       color: 'giveaway',
       title: `🎉 ${prize}`,
       description: [
+        `​`,
         `**Hosted By:** ${interaction.user}`,
+        `​`,
         `**Participants:** 0`,
+        `​`,
         `**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
+        `​`,
       ].join('\n'),
     });
 
