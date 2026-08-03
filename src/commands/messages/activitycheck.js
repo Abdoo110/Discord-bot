@@ -15,6 +15,7 @@ module.exports = {
     const role = interaction.options.getRole('role');
     const customMsg = interaction.options.getString('message') || 'Please react to confirm your activity!';
 
+    let wasMentionable = role.mentionable;
     if (!role.mentionable) {
       try { await role.setMentionable(true); } catch (_) {}
     }
@@ -29,6 +30,10 @@ module.exports = {
 
     const msg = await interaction.channel.send({ content: `${role}`, embeds: [embed] });
     await msg.react('✅');
+
+    if (!wasMentionable) {
+      try { await role.setMentionable(false); } catch (_) {}
+    }
 
     await interaction.reply({ embeds: [
       buildEmbed({ color: 'success', title: '✅ Activity Check Sent', description: 'The activity check has been posted.' })

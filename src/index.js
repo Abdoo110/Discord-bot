@@ -49,25 +49,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
       try {
         const messageId = interaction.customId.replace('giveaway_enter_', '');
         const Giveaway = require('./models/Giveaway');
-        const giveaway = await Giveaway.findOne({ guildId: interaction.guild.id, messageId, ended: false });
 
-        if (!giveaway) {
-          return interaction.reply({ content: '❌ This giveaway has ended or no longer exists.', flags: MessageFlags.Ephemeral });
-        }
+        const updated = await Giveaway.findOneAndUpdate(
+          { guildId: interaction.guild.id, messageId, ended: false, entrants: { $ne: interaction.user.id } },
+          { $push: { entrants: interaction.user.id } },
+          { new: true }
+        );
 
-        if (giveaway.entrants?.includes(interaction.user.id)) {
+        if (!updated) {
+          const giveaway = await Giveaway.findOne({ guildId: interaction.guild.id, messageId });
+          if (!giveaway || giveaway.ended) {
+            return interaction.reply({ content: '❌ This giveaway has ended or no longer exists.', flags: MessageFlags.Ephemeral });
+          }
           return interaction.reply({ content: '⚠️ You\'ve already entered this giveaway!', flags: MessageFlags.Ephemeral });
         }
-
-        giveaway.entrants.push(interaction.user.id);
-        await giveaway.save();
 
         try {
           const msg = await interaction.channel.messages.fetch(messageId);
           const embed = msg.embeds[0];
           if (embed) {
             const newDesc = embed.description
-              .replace(/\*\*Participants:\*\* \d+/, `**Participants:** ${giveaway.entrants.length}`);
+              .replace(/\*\*Participants:\*\* \d+/, `**Participants:** ${updated.entrants.length}`);
             await msg.edit({ embeds: [
               require('./utils/embed').buildEmbed({
                 color: 'giveaway',
@@ -130,7 +132,7 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
         const expired = await Giveaway.find({ ended: false, endsAt: { $lte: new Date() } });
         for (const gw of expired) {
           try {
-            const channel = client.channels.cache.get(gw.channelId);
+            const channel = await client.channels.fetch(gw.channelId).catch(() => null);
             if (!channel) continue;
             const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
             if (!msg) continue;

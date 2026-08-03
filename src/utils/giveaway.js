@@ -4,6 +4,10 @@ async function pickWinners(msg, giveaway, isReroll = false) {
   const entrants = giveaway.entrants || [];
 
   if (entrants.length === 0) {
+    giveaway.ended = true;
+    giveaway.endsAt = new Date();
+    await giveaway.save();
+    try { await msg.edit({ components: [] }); } catch (_) {}
     await msg.reply({ embeds: [
       buildEmbed({ color: 'error', title: '❌ No Entries', description: 'No one entered the giveaway.' })
     ]});
