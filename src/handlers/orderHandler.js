@@ -1,22 +1,26 @@
-const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionsBitField } = require('discord.js');
+const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionFlagsBits } = require('discord.js');
 const { calculatePrice } = require('../utils/orderPricing');
 const Order = require('../models/Order');
 const GuildConfig = require('../models/GuildConfig');
 
 async function handleOrderInteraction(interaction) {
   try {
-    if (interaction.isButton() && interaction.customId === 'order_create') { await showOrderModal(interaction); return true; }
+    if (interaction.isModalSubmit() && interaction.customId.startsWith('order_modal_msg_')) { await handleMessageSubmit(interaction); return true; }
     if (interaction.isModalSubmit() && interaction.customId.startsWith('order_modal_')) { await processOrder(interaction); return true; }
+    if (interaction.isButton() && interaction.customId === 'order_create') { await showOrderModal(interaction); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_confirm_')) { await confirmOrder(interaction); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_ready_')) { await userReady(interaction); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_msg_S_')) { await openMessageModal(interaction, 'staff'); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_msg_U_')) { await openMessageModal(interaction, 'user'); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_done_S_')) { await completeOrder(interaction, 'staff'); return true; }
     if (interaction.isButton() && interaction.customId.startsWith('order_done_U_')) { await completeOrder(interaction, 'user'); return true; }
-    if (interaction.isModalSubmit() && interaction.customId.startsWith('order_modal_msg_')) { await handleMessageSubmit(interaction); return true; }
   } catch (err) {
-    console.error('[ORDER]', err.stack || err.message);
-    try { if (!interaction.replied && !interaction.deferred) await interaction.reply({ content: 'Something went wrong. Please try again.', flags: MessageFlags.Ephemeral }); } catch (_) {}
+    console.error('[ORDER]', err.stack || err.message || err);
+    const msg = err.message || String(err);
+    try {
+      if (interaction.replied || interaction.deferred) await interaction.followUp({ content: `Error: ${msg}`, flags: MessageFlags.Ephemeral }).catch(() => {});
+      else await interaction.reply({ content: `Error: ${msg}`, flags: MessageFlags.Ephemeral }).catch(() => {});
+    } catch (_) {}
   }
   return false;
 }
@@ -59,27 +63,31 @@ async function processOrder(interaction) {
 }
 
 async function confirmOrder(interaction) {
-  if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
+  if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
   const orderId = interaction.customId.slice('order_confirm_'.length);
   const order = await Order.findById(orderId);
   if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
   if (order.status !== 'pending') return interaction.reply({ content: `Order is already **${order.status}**.`, flags: MessageFlags.Ephemeral });
   order.status = 'processing'; await order.save();
-  try { const user = await interaction.client.users.fetch(order.userId); await user.send({ embeds: [new EmbedBuilder().setTitle('Order Processing').setDescription(`Your order is being processed.\n\n**Shulker Type:** ${order.shulkerType}\n**Quantity:** ${order.quantity}\n**Total Price:** ${order.formattedPrice}`).setColor('#FEE75C').setTimestamp()] }); } catch (_) {}
+
+  try { const user = await interaction.client.users.fetch(order.userId); await user.send({ embeds: [new EmbedBuilder().setTitle('Order Processing').setDescription(`Your order is now being processed.\n\n**Shulker Type:** ${order.shulkerType}\n**Quantity:** ${order.quantity}\n**Total Price:** ${order.formattedPrice}`).setColor('#FEE75C').setTimestamp()] }); } catch (_) {}
+
   try {
     const channel = interaction.guild.channels.cache.get(order.orderChannelId);
     if (channel) { const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
       if (msg) { const emb = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Order ID: ${order._id} | Status: Processing` }).setColor('#FEE75C');
-        const cf = new ButtonBuilder().setCustomId(`order_confirm_${order._id}`).setLabel(`Confirm Order - ${order.formattedPrice}`).setStyle(ButtonStyle.Success).setDisabled(true);
+        const pb = new ButtonBuilder().setCustomId('order_processing').setLabel('Processing...').setStyle(ButtonStyle.Secondary).setDisabled(true);
         const rb = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('User is Ready').setStyle(ButtonStyle.Primary);
-        await msg.edit({ embeds: [emb], components: [new ActionRowBuilder().addComponents(cf, rb)] }); }
+        const db = new ButtonBuilder().setCustomId(`order_done_S_${order._id}`).setLabel('Order Successful').setStyle(ButtonStyle.Success);
+        await msg.edit({ embeds: [emb], components: [new ActionRowBuilder().addComponents(pb, rb, db)] }); }
     }
   } catch (_) {}
+
   await interaction.reply({ content: 'Order confirmed - user DMed.', flags: MessageFlags.Ephemeral });
 }
 
 async function userReady(interaction) {
-  if (!interaction.member.permissions.has(PermissionsBitField.Flags.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
+  if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
   const orderId = interaction.customId.slice('order_ready_'.length);
   const order = await Order.findById(orderId);
   if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
@@ -127,6 +135,7 @@ async function handleMessageSubmit(interaction) {
   if (!channel) return interaction.reply({ content: 'Orders channel not found.', flags: MessageFlags.Ephemeral });
   const orderMsg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
   if (!orderMsg) return interaction.reply({ content: 'Order message not found.', flags: MessageFlags.Ephemeral });
+  if (!orderMsg.embeds[0]) return interaction.reply({ content: 'Embed missing from message.', flags: MessageFlags.Ephemeral });
 
   const oldDesc = EmbedBuilder.from(orderMsg.embeds[0]).data.description || '';
   const label = sender === 'staff' ? '\n**Staff:**' : `\n**${interaction.user.username}:**`;
@@ -149,7 +158,7 @@ async function completeOrder(interaction, who) {
   if (guild) {
     const channel = guild.channels.cache.get(order.orderChannelId);
     if (channel) { const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
-      if (msg) { const oldDesc = EmbedBuilder.from(msg.embeds[0]).data.description || ''; const whoLabel = who === 'staff' ? 'Staff' : interaction.user.username;
+      if (msg && msg.embeds[0]) { const oldDesc = EmbedBuilder.from(msg.embeds[0]).data.description || ''; const whoLabel = who === 'staff' ? 'Staff' : interaction.user.username;
         const emb = EmbedBuilder.from(msg.embeds[0]).setDescription(oldDesc + `\n\n**Completed by ${whoLabel}**`).setFooter({ text: `Order ID: ${order._id} | Status: Completed` }).setColor('#57F287');
         await msg.edit({ embeds: [emb], components: [] }); }
     }
