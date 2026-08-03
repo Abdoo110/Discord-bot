@@ -7,6 +7,7 @@ const giveawaySchema = new mongoose.Schema({
   hostId: { type: String, required: true },
   hostName: { type: String, default: '' },
   prize: { type: String, required: true },
+  prizeValue: { type: Number, default: 0 },   // parsed numeric value (5M → 5000000)
   winners: { type: Number, default: 1 },
   durationMs: { type: Number, required: true },
   endsAt: { type: Date, required: true },

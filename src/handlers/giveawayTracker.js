@@ -1,11 +1,5 @@
 const Giveaway = require('../models/Giveaway');
 
-/**
- * Detects giveaway messages from any bot.
- * GiveawayBot uses timestamps like <t:...> with "Ends:"
- */
-
-// Bot usernames that are known giveaway bots (lowercase)
 const GIVEAWAY_BOTS = [
   'giveawaybot', 'mee6', 'dyno', 'carl-bot', 'carlbot',
   'giveaway boat', 'prizebot', 'vibebot', 'cinnamon', 'arcane',
@@ -13,57 +7,72 @@ const GIVEAWAY_BOTS = [
 ];
 
 function isGiveawayBot(username) {
-  const lower = username.toLowerCase();
-  return GIVEAWAY_BOTS.some(b => lower.includes(b));
+  return GIVEAWAY_BOTS.some(b => username.toLowerCase().includes(b));
 }
 
-// Check if embed looks like a giveaway
 function looksLikeGiveaway(embed) {
-  const desc = (embed.description || '').toLowerCase();
-  const title = (embed.title || '').toLowerCase();
-  const combined = title + ' ' + desc + ' ' + (embed.footer?.text || '');
-
-  // Has timestamp like <t:...> with Ends/Winners/Prize
-  if (/<t:\d+:[RrFfDdTt]>/.test(embed.description || '') &&
-      /ends|winners|prize|entries/i.test(combined)) return true;
-
-  // Has giveaway keywords (in case some bots still use them)
+  const combined = ((embed.title || '') + ' ' + (embed.description || '') + ' ' + (embed.footer?.text || '')).toLowerCase();
+  if (/<t:\d+:[RrFfDdTt]>/.test(embed.description || '') && /ends|winners|prize|entries/i.test(combined)) return true;
   if (/giveaway|give away|give-away/i.test(combined)) return true;
-
   return false;
 }
 
+/**
+ * Parse numeric value from prize string.
+ * "5M" → 5000000, "5.5m" → 5500000, "10K" → 10000, "1B" → 1000000000
+ * "1000000" → 1000000, "Nitro" → 0
+ */
+function parsePrizeValue(prize) {
+  const cleaned = String(prize).replace(/,/g, '').trim();
+  const match = cleaned.match(/^([\d.]+)\s*([mkb])$/i);
+  if (match) {
+    const num = parseFloat(match[1]);
+    const suffix = match[2].toUpperCase();
+    if (suffix === 'K') return Math.round(num * 1000);
+    if (suffix === 'M') return Math.round(num * 1000000);
+    if (suffix === 'B') return Math.round(num * 1000000000);
+  }
+  const pure = cleaned.match(/^(\d+)$/);
+  if (pure) return parseInt(pure[1], 10);
+  return 0;
+}
+
+/**
+ * Format a number back to readable form.
+ * 5000000 → "5M", 10000 → "10K", 1500000 → "1.5M"
+ */
+function formatValue(n) {
+  if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+  if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  return String(n);
+}
+
 function extractHostName(embed) {
-  // Check footer first (GiveawayBot puts "Hosted by: @User" there)
   const footer = embed.footer?.text || '';
+  const desc = embed.description || '';
+
   const m1 = footer.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
   if (m1) return m1[1].trim();
 
-  // Check description
-  const desc = embed.description || '';
   const m2 = desc.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
   if (m2) return m2[1].trim();
 
-  // Check embed fields for "Host" or "Hosted by"
   if (embed.fields) {
     for (const field of embed.fields) {
-      const fName = field.name.toLowerCase();
-      if (fName.includes('host')) return field.value.replace(/[@<>]/g, '');
+      if (field.name.toLowerCase().includes('host')) return field.value.replace(/[@<>]/g, '');
       const m3 = field.value.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
       if (m3) return m3[1].trim();
     }
   }
 
-  // Check author
   if (embed.author?.name) return embed.author.name;
-
   return null;
 }
 
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot) return;
 
-  // Dump full embed for ALL embeds from unknown bots
   if (message.embeds?.length) {
     const e = message.embeds[0];
     const fields = (e.fields || []).map(f => `${f.name}=${f.value}`).join(' | ');
@@ -77,7 +86,10 @@ async function handleMessage(message) {
   if (!looksLikeGiveaway(embed)) return;
 
   const hostName = extractHostName(embed) || 'Unknown';
-  console.log(`[TRACKER] ✅ Giveaway by ${hostName}`);
+  const prize = embed.title || 'Giveaway';
+  const prizeValue = parsePrizeValue(prize);
+
+  console.log(`[TRACKER] ✅ Giveaway by ${hostName} — prize="${prize}" (${formatValue(prizeValue) || 'non-numeric'})`);
 
   try {
     await Giveaway.create({
@@ -86,7 +98,8 @@ async function handleMessage(message) {
       channelId: message.channel.id,
       hostId: message.author.id,
       hostName,
-      prize: embed.title || 'Giveaway',
+      prize,
+      prizeValue,
       winners: 1,
       durationMs: 3600000,
       endsAt: new Date(Date.now() + 3600000),
@@ -97,4 +110,4 @@ async function handleMessage(message) {
   }
 }
 
-module.exports = { handleMessage };
+module.exports = { handleMessage, formatValue, parsePrizeValue };
