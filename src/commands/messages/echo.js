@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, ChannelType, MessageFlags } = require('discord.js');
 const { success, error } = require('../../utils/embed');
 
 module.exports = {
@@ -13,7 +13,13 @@ module.exports = {
   async execute(interaction) {
     const content = interaction.options.getString('message');
     const channel = interaction.options.getChannel('channel') || interaction.channel;
-    await channel.send({ embeds: [require('../../utils/embed').buildEmbed({ color: 'info', description: content })] });
-    await interaction.reply({ embeds: [require('../../utils/embed').buildEmbed({ color: 'success', title: '✅ Message Sent', description: `Message sent to ${channel}.` })], ephemeral: true });
+
+    await channel.send({ embeds: [
+      require('../../utils/embed').buildEmbed({ color: 'info', description: content })
+    ]});
+
+    await interaction.reply({ embeds: [
+      require('../../utils/embed').buildEmbed({ color: 'success', title: '✅ Message Sent', description: `Message sent to ${channel}.` })
+    ], flags: MessageFlags.Ephemeral });
   },
 };

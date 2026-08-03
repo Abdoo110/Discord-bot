@@ -1,52 +1,45 @@
 require('dotenv').config();
-const { Client, GatewayIntentBits, Collection, Events } = require('discord.js');
+const { Client, GatewayIntentBits, Collection, Events, MessageFlags } = require('discord.js');
 const chalk = require('chalk');
 const mongoose = require('mongoose');
 const config = require('./config');
 const { loadCommands } = require('./handlers/commandHandler');
 const { deployCommands } = require('./deploy-commands');
 
+// ─── Client Setup ──────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildModeration,
     GatewayIntentBits.GuildMessageReactions,
-  ],
-  partials: [],
+    GatewayIntentBits.GuildModeration,
+  ]
 });
 
-client.commands = loadCommands();
+client.commands = new Collection();
 
-mongoose.set('strictQuery', false);
+// ─── Database Connection ───────────────────
+mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://abdooessied_db_user:Abdopass123@cluster0.axiocip.mongodb.net/discord-bot?retryWrites=true&w=majority')
+  .then(() => console.log(chalk.green('✅ Connected to MongoDB')))
+  .catch(err => console.error(chalk.red('❌ MongoDB connection error:'), err));
 
-async function connectDB() {
-  try {
-    await mongoose.connect(config.mongoUri);
-    console.log(chalk.green('✅ Connected to MongoDB'));
-  } catch (error) {
-    console.error(chalk.red('❌ MongoDB connection error:'), error.message);
-    process.exit(1);
-  }
-}
+// ─── Ready Event ───────────────────────────
+client.once(Events.ClientReady, async (c) => {
+  console.log(chalk.cyan(`🚀 ${c.user.tag} is online!`));
 
-client.once(Events.ClientReady, () => {
-  console.log('');
-  console.log(chalk.cyan('╔══════════════════════════════════╗'));
-  console.log(chalk.cyan(`║   🤖 Logged in as ${chalk.bold(client.user.tag)}`));
-  console.log(chalk.cyan(`║   🌐 Serving ${chalk.bold(client.guilds.cache.size)} guild(s)`));
-  console.log(chalk.cyan('║   ⚡ Bot is online & ready!'));
-  console.log(chalk.cyan('╚══════════════════════════════════╝'));
-  console.log('');
+  await loadCommands(client);
+  await deployCommands();
 
-  client.user.setPresence({
-    activities: [{ name: `${client.guilds.cache.size} servers | /commands`, type: 3 }],
-    status: 'online',
-  });
+  // Load sticky message handler
+  require('./handlers/stickyHandler')(client);
+
+  // Load anti-abuse
+  require('./handlers/antiAbuse')(client);
 });
 
+// ─── Interaction Handler ───────────────────
 client.on(Events.InteractionCreate, async interaction => {
   if (!interaction.isChatInputCommand()) return;
 
@@ -58,7 +51,8 @@ client.on(Events.InteractionCreate, async interaction => {
   } catch (error) {
     console.error(chalk.red(`❌ Error executing /${interaction.commandName}:`), error);
     const { buildEmbed } = require('./utils/embed');
-    const reply = { embeds: [buildEmbed({ color: 'error', title: '❌ Error', description: 'An unexpected error occurred. Please try again later.' })], ephemeral: true };
+    const reply = { embeds: [buildEmbed({ color: 'error', title: '❌ Error', description: 'An unexpected error occurred. Please try again later.' })], flags: MessageFlags.Ephemeral };
+
     if (interaction.replied || interaction.deferred) {
       await interaction.followUp(reply);
     } else {
@@ -67,50 +61,41 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
-const { messageHandler, snipeHandler, stickyHandler, memberAddHandler, channelDeleteHandler, roleDeleteHandler, banAddHandler } = require('./events/messageEvents');
+// ─── Anti-Nuke: Anti-Bot Join ──────────────
+client.on(Events.GuildMemberAdd, async member => {
+  if (!member.user.bot) return;
 
-client.on(Events.MessageCreate, messageHandler.execute);
-client.on(Events.MessageDelete, snipeHandler.execute);
-client.on(Events.MessageCreate, stickyHandler.execute);
-client.on(Events.GuildMemberAdd, memberAddHandler.execute);
-client.on(Events.ChannelDelete, channelDeleteHandler.execute);
-client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
-client.on(Events.GuildBanAdd, banAddHandler.execute);
+  const guildConfig = require('./utils/guildConfig');
+  const cfg = await guildConfig.getConfig(member.guild.id);
 
-const Giveaway = require('./models/Giveaway');
-const { pickWinners } = require('./utils/giveaway');
+  if (!cfg.antiNuke?.enabled) return;
 
-setInterval(async () => {
-  try {
-    const endedGiveaways = await Giveaway.find({ ended: false, endsAt: { $lte: new Date() } });
-    for (const giveaway of endedGiveaways) {
-      const guild = client.guilds.cache.get(giveaway.guildId);
-      if (!guild) continue;
-      const channel = guild.channels.cache.get(giveaway.channelId);
-      if (!channel) continue;
-      try {
-        const msg = await channel.messages.fetch(giveaway.messageId);
-        await pickWinners(msg, giveaway);
-      } catch (_) {
-        giveaway.ended = true;
-        giveaway.winnerIds = [];
-        await giveaway.save();
-      }
-    }
-  } catch (_) {}
-}, 15000);
-
-async function start() {
-  await connectDB();
-  await deployCommands();
-  await client.login(config.token);
-}
-
-start();
-
-process.on('SIGINT', async () => {
-  console.log(chalk.yellow('\n🛑 Shutting down...'));
-  await mongoose.disconnect();
-  client.destroy();
-  process.exit(0);
+  const { EmbedBuilder } = require('discord.js');
+  const logChannel = member.guild.channels.cache.get(cfg.channels?.modLogs);
+  if (logChannel) {
+    logChannel.send({
+      embeds: [
+        new EmbedBuilder()
+          .setColor('Orange')
+          .setTitle('⚠️ Suspicious Bot Joined')
+          .setDescription(`Bot ${member.user.tag} (${member.id}) joined but no ban/purge action was configured.`)
+          .setTimestamp()
+      ]
+    });
+  }
 });
+
+// ─── Anti-Spam ────────────────────────────
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot || !message.guild) return;
+
+  const guildConfig = require('./utils/guildConfig');
+  const cfg = await guildConfig.getConfig(message.guild.id);
+
+  if (cfg.antiSpam?.enabled) {
+    const { default: AntiSpam } = await import('./handlers/antiSpam.js');
+    AntiSpam(message, cfg.antiSpam);
+  }
+});
+
+client.login(process.env.DISCORD_TOKEN);

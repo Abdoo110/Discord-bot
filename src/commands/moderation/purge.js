@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, MessageFlags } = require('discord.js');
 const { success, error } = require('../../utils/embed');
 const { getConfig } = require('../../utils/guildConfig');
 
@@ -15,7 +15,7 @@ module.exports = {
     const amount = interaction.options.getInteger('amount');
     const targetUser = interaction.options.getUser('user');
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: MessageFlags.Ephemeral });
 
     const messages = await interaction.channel.messages.fetch({ limit: 100 });
     let filtered = [...messages.values()].slice(0, amount);
@@ -24,6 +24,7 @@ module.exports = {
       filtered = filtered.filter(m => m.author.id === targetUser.id);
     }
 
+    // Filter out messages older than 14 days (Discord API limit)
     const twoWeeksAgo = Date.now() - 14 * 24 * 60 * 60 * 1000;
     filtered = filtered.filter(m => m.createdTimestamp > twoWeeksAgo);
 

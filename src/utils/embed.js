@@ -1,6 +1,20 @@
-const { EmbedBuilder } = require('discord.js');
+const { EmbedBuilder, MessageFlags } = require('discord.js');
 const config = require('../config');
 
+/**
+ * Quick embed builder — always returns an EmbedBuilder.
+ * @param {object} opts
+ * @param {string} [opts.color]  — key in config.colors or hex string
+ * @param {string} [opts.title]
+ * @param {string} [opts.description]
+ * @param {Array}  [opts.fields] — { name, value, inline? }
+ * @param {string} [opts.footer]
+ * @param {string} [opts.thumbnail]
+ * @param {string} [opts.image]
+ * @param {string} [opts.author]
+ * @param {string} [opts.authorIcon]
+ * @param {number} [opts.timestamp] — Date.now()
+ */
 function buildEmbed(opts = {}) {
   const colorKey = opts.color || 'default';
   const color = config.colors[colorKey] || config.colors.default;
@@ -25,6 +39,9 @@ function buildEmbed(opts = {}) {
   return embed;
 }
 
+/**
+ * Quick reply helpers
+ */
 function success(interactionOrMsg, title, description) {
   const embed = buildEmbed({ color: 'success', title, description, timestamp: Date.now() });
   return interactionOrMsg.reply ? interactionOrMsg.reply({ embeds: [embed] }) : interactionOrMsg.channel.send({ embeds: [embed] });
@@ -32,7 +49,7 @@ function success(interactionOrMsg, title, description) {
 
 function error(interactionOrMsg, title, description) {
   const embed = buildEmbed({ color: 'error', title, description, timestamp: Date.now() });
-  return interactionOrMsg.reply ? interactionOrMsg.reply({ embeds: [embed], ephemeral: true }) : interactionOrMsg.channel.send({ embeds: [embed] });
+  return interactionOrMsg.reply ? interactionOrMsg.reply({ embeds: [embed], flags: MessageFlags.Ephemeral }) : interactionOrMsg.channel.send({ embeds: [embed] });
 }
 
 function warn(interactionOrMsg, title, description) {
