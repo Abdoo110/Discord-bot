@@ -32,10 +32,13 @@ module.exports = {
     const hosts = {};
     for (const gw of giveaways) {
       let name = gw.hostName;
-      if (!name) {
-        const member = interaction.guild.members.cache.get(gw.hostId);
-        name = member ? member.user.username : 'Unknown';
+      if (!name || name === 'Unknown') {
+        try {
+          const member = await interaction.guild.members.fetch(gw.hostId).catch(() => null);
+          if (member) name = member.user.username;
+        } catch {}
       }
+      if (!name || name === 'Unknown') name = 'Unknown';
       if (!hosts[name]) hosts[name] = { count: 0, totalValue: 0 };
       hosts[name].count++;
       hosts[name].totalValue += gw.prizeValue || 0;
