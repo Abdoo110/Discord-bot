@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, PermissionFlagsBits } = require('discord.js');
+const { SlashCommandBuilder, PermissionFlagsBits, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 const { buildEmbed, success, error } = require('../../utils/embed');
 const Giveaway = require('../../models/Giveaway');
 const { parsePrizeValue } = require('../../handlers/giveawayTracker');
@@ -23,8 +23,8 @@ module.exports = {
     const requirements = interaction.options.getString('requirements');
 
     const durationMs = ms(durStr);
-    if (!durationMs || durationMs < 10000) return error(interaction, 'Error', 'Invalid duration. Minimum 10 seconds.');
-    if (durationMs > 2592000000) return error(interaction, 'Error', 'Duration cannot exceed 30 days.');
+    if (!durationMs || durationMs < 10000) return error(interaction, '❌ Error', 'Invalid duration. Minimum 10 seconds. Use formats like: 10m, 1h, 1d.');
+    if (durationMs > 2592000000) return error(interaction, '❌ Error', 'Duration cannot exceed 30 days.');
 
     const endsAt = new Date(Date.now() + durationMs);
 
@@ -32,7 +32,7 @@ module.exports = {
       color: 'giveaway',
       title: `🎉 ${prize}`,
       description: [
-        `React with 🎉 to enter!`,
+        `Click the 🎉 button below to enter!`,
         `**Winners:** ${winners}`,
         `**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
         requirements ? `**Requirements:** ${requirements}` : '',
@@ -43,9 +43,8 @@ module.exports = {
       timestamp: endsAt,
     });
 
-    await interaction.reply({ content: '🎉 **GIVEAWAY** 🎉', embeds: [embed] });
+    await interaction.reply({ content: '🎉 **GIVEAWAY** 🎉', embeds: [embed], fetchReply: true });
     const msg = await interaction.fetchReply();
-    await msg.react('🎉');
 
     await Giveaway.create({
       guildId: interaction.guild.id,
@@ -59,6 +58,15 @@ module.exports = {
       durationMs,
       endsAt,
     });
+
+    const button = new ButtonBuilder()
+      .setCustomId(`giveaway_enter_${msg.id}`)
+      .setLabel('Enter')
+      .setEmoji('🎉')
+      .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder().addComponents(button);
+    await msg.edit({ components: [row] });
 
     const cfg = await getConfig(interaction.guild.id);
     if (cfg.channels.giveawayLogs) {

@@ -1,4 +1,3 @@
-// ─── CRASH PROTECTION ──────────────────────
 process.on('unhandledRejection', (reason) => {
   console.error('[CRASH] Unhandled Rejection:', reason?.stack || reason);
 });
@@ -14,7 +13,6 @@ const config = require('./config');
 const { loadCommands } = require('./handlers/commandHandler');
 const { deployCommands } = require('./deploy-commands');
 
-// ─── Client ────────────────────────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -26,7 +24,6 @@ const client = new Client({
 
 client.commands = loadCommands();
 
-// ─── MongoDB ───────────────────────────────
 mongoose.set('strictQuery', false);
 async function connectDB() {
   try {
@@ -38,8 +35,6 @@ async function connectDB() {
   }
 }
 
-// ─── Events ────────────────────────────────
-
 client.once(Events.ClientReady, async () => {
   console.log(chalk.cyan(`✅ Logged in as ${chalk.bold(client.user.tag)} — ${client.guilds.cache.size} guild(s)`));
   client.user.setPresence({
@@ -49,6 +44,35 @@ client.once(Events.ClientReady, async () => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  if (interaction.isButton()) {
+    if (interaction.customId.startsWith('giveaway_enter_')) {
+      try {
+        const messageId = interaction.customId.replace('giveaway_enter_', '');
+        const Giveaway = require('./models/Giveaway');
+        const giveaway = await Giveaway.findOne({ guildId: interaction.guild.id, messageId, ended: false });
+
+        if (!giveaway) {
+          return interaction.reply({ content: '❌ This giveaway has ended or no longer exists.', flags: MessageFlags.Ephemeral });
+        }
+
+        if (giveaway.entrants?.includes(interaction.user.id)) {
+          return interaction.reply({ content: '⚠️ You\'ve already entered this giveaway!', flags: MessageFlags.Ephemeral });
+        }
+
+        giveaway.entrants.push(interaction.user.id);
+        await giveaway.save();
+
+        await interaction.reply({ content: '🎉 **You entered the giveaway!** Good luck!', flags: MessageFlags.Ephemeral });
+      } catch (err) {
+        console.error('[GIVEAWAY-BUTTON] Error:', err.message);
+        if (!interaction.replied) {
+          await interaction.reply({ content: '❌ Something went wrong. Try again.', flags: MessageFlags.Ephemeral }).catch(() => {});
+        }
+      }
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
@@ -63,7 +87,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// Message events (anti-spam, prefix, snipe, sticky, giveaway tracking)
 const {
   messageHandler, snipeHandler, stickyHandler,
   memberAddHandler, channelDeleteHandler, roleDeleteHandler, banAddHandler,
@@ -77,7 +100,6 @@ client.on(Events.ChannelDelete, channelDeleteHandler.execute);
 client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
 client.on(Events.GuildBanAdd, banAddHandler.execute);
 
-// ─── Start ─────────────────────────────────
 (async () => {
   try {
     await connectDB();
