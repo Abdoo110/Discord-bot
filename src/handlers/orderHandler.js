@@ -1,5 +1,4 @@
 const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder, MessageFlags, PermissionsBitField } = require('discord.js');
-const { buildEmbed } = require('../utils/embed');
 const { calculatePrice } = require('../utils/orderPricing');
 const Order = require('../models/Order');
 const GuildConfig = require('../models/GuildConfig');
