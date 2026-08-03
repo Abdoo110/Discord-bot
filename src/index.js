@@ -125,9 +125,14 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
     await client.login(config.token);
     console.log(chalk.green('✅ Bot is online!'));
 
+    const Giveaway = require('./models/Giveaway');
+    const { scheduleEnd } = require('./utils/giveaway');
+    const active = await Giveaway.find({ ended: false });
+    for (const gw of active) scheduleEnd(client, gw);
+    console.log(chalk.cyan(`📅 Scheduled ${active.length} active giveaway(s)`));
+
     setInterval(async () => {
       try {
-        const Giveaway = require('./models/Giveaway');
         const { pickWinners } = require('./utils/giveaway');
         const expired = await Giveaway.find({ ended: false, endsAt: { $lte: new Date() } });
         for (const gw of expired) {
@@ -137,15 +142,15 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
             const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
             if (!msg) continue;
             await pickWinners(msg, gw);
-            console.log(`[AUTO-END] Ended giveaway "${gw.prize}" in ${gw.guildId}`);
+            console.log(`[SAFETY] Ended giveaway "${gw.prize}" in ${gw.guildId}`);
           } catch (err) {
-            console.error('[AUTO-END] Error ending giveaway:', err.message);
+            console.error('[SAFETY] Error:', err.message);
           }
         }
       } catch (err) {
-        console.error('[AUTO-END] Check error:', err.message);
+        console.error('[SAFETY] Check error:', err.message);
       }
-    }, 5000);
+    }, 120000);
   } catch (err) {
     console.error(chalk.red('❌ Startup failed:'), err.stack || err.message);
     process.exit(1);

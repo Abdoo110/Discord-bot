@@ -1,6 +1,14 @@
 const { buildEmbed } = require('./embed');
 
+/**
+ * Pick winners from a giveaway.
+ * @param {Message} msg — the giveaway message
+ * @param {Object} giveaway — Giveaway model doc
+ * @param {boolean} [isReroll=false]
+ */
 async function pickWinners(msg, giveaway, isReroll = false) {
+  if (giveaway.ended) return [];
+
   const entrants = giveaway.entrants || [];
 
   if (entrants.length === 0) {
@@ -74,4 +82,33 @@ async function pickWinners(msg, giveaway, isReroll = false) {
   return winners;
 }
 
-module.exports = { pickWinners };
+/**
+ * End a giveaway by fetching its channel+message and calling pickWinners.
+ */
+async function endGiveaway(client, giveaway) {
+  const Giveaway = require('../models/Giveaway');
+  const fresh = await Giveaway.findById(giveaway._id);
+  if (!fresh || fresh.ended) return;
+
+  const channel = await client.channels.fetch(fresh.channelId).catch(() => null);
+  if (!channel) return;
+  const msg = await channel.messages.fetch(fresh.messageId).catch(() => null);
+  if (!msg) return;
+
+  await pickWinners(msg, fresh);
+  console.log(`[END] Ended giveaway "${fresh.prize}" (guild ${fresh.guildId})`);
+}
+
+/**
+ * Schedule a giveaway to end exactly at its endsAt time.
+ */
+function scheduleEnd(client, giveaway) {
+  const remaining = giveaway.endsAt.getTime() - Date.now();
+  if (remaining <= 0) {
+    endGiveaway(client, giveaway);
+    return;
+  }
+  setTimeout(() => endGiveaway(client, giveaway), remaining);
+}
+
+module.exports = { pickWinners, endGiveaway, scheduleEnd };

@@ -2,6 +2,7 @@ const { SlashCommandBuilder, PermissionFlagsBits, ButtonBuilder, ButtonStyle, Ac
 const { buildEmbed, success, error } = require('../../utils/embed');
 const Giveaway = require('../../models/Giveaway');
 const { parsePrizeValue } = require('../../handlers/giveawayTracker');
+const { scheduleEnd } = require('../../utils/giveaway');
 const { getConfig } = require('../../utils/guildConfig');
 const ms = require('ms');
 
@@ -58,6 +59,9 @@ module.exports = {
       endsAt,
       entrants: [],
     });
+
+    const doc = await Giveaway.findOne({ messageId: msg.id });
+    if (doc) scheduleEnd(interaction.client, doc);
 
     const button = new ButtonBuilder()
       .setCustomId(`giveaway_enter_${msg.id}`)
