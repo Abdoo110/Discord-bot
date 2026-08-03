@@ -48,7 +48,7 @@ client.once(Events.ClientReady, async () => {
 
   // Set status
   client.user.setPresence({
-    activities: [{ name: `${client.guilds.cache.size} server | Join our support server down below`, type: 3 }], // Watching
+    activities: [{ name: `${client.guilds.cache.size} server | join our support server`, type: 3 }], // Watching
     status: 'online',
   });
 });

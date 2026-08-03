@@ -17,11 +17,6 @@ function looksLikeGiveaway(embed) {
   return false;
 }
 
-/**
- * Parse numeric value from prize string.
- * "5M" → 5000000, "5.5m" → 5500000, "10K" → 10000, "1B" → 1000000000
- * "1000000" → 1000000, "Nitro" → 0
- */
 function parsePrizeValue(prize) {
   const cleaned = String(prize).replace(/,/g, '').trim();
   const match = cleaned.match(/^([\d.]+)\s*([mkb])$/i);
@@ -37,10 +32,6 @@ function parsePrizeValue(prize) {
   return 0;
 }
 
-/**
- * Format a number back to readable form.
- * 5000000 → "5M", 10000 → "10K", 1500000 → "1.5M"
- */
 function formatValue(n) {
   if (n >= 1000000000) return (n / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
   if (n >= 1000000) return (n / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
@@ -48,35 +39,37 @@ function formatValue(n) {
   return String(n);
 }
 
-function extractHostName(embed) {
+function extractHostFromEmbed(embed) {
   const footer = embed.footer?.text || '';
   const desc = embed.description || '';
 
-  const m1 = footer.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  const m1 = footer.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
   if (m1) return m1[1].trim();
 
-  const m2 = desc.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  const m2 = desc.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
   if (m2) return m2[1].trim();
 
   if (embed.fields) {
     for (const field of embed.fields) {
-      if (field.name.toLowerCase().includes('host')) return field.value.replace(/[@<>]/g, '');
-      const m3 = field.value.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+      if (/host/i.test(field.name)) return field.value.replace(/[@<>]/g, '').trim();
+      const m3 = field.value.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
       if (m3) return m3[1].trim();
     }
   }
 
-  if (embed.author?.name) return embed.author.name;
+  if (embed.author?.name && !/giveaway/i.test(embed.author.name)) return embed.author.name;
   return null;
 }
 
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot) return;
 
+  // Log ALL bot embeds for debugging
   if (message.embeds?.length) {
     const e = message.embeds[0];
-    const fields = (e.fields || []).map(f => `${f.name}=${f.value}`).join(' | ');
-    console.log(`[TRACKER] "${message.author.username}" | title="${e.title}" | desc="${(e.description||'').slice(0,80)}" | footer="${e.footer?.text||''}" | author="${e.author?.name||''}" | fields=[${fields}]`);
+    const fields = (e.fields || []).map(f => `${f.name}=${f.value.slice(0,40)}`).join(' | ');
+    const intUser = message.interaction?.user?.username || 'none';
+    console.log(`[TRACKER] "${message.author.username}" | intUser=${intUser} | title="${e.title}" | footer="${e.footer?.text||''}" | author="${e.author?.name||''}" | fields=[${fields}]`);
   }
 
   if (!isGiveawayBot(message.author.username)) return;
@@ -85,7 +78,15 @@ async function handleMessage(message) {
   const embed = message.embeds[0];
   if (!looksLikeGiveaway(embed)) return;
 
-  const hostName = extractHostName(embed) || 'Unknown';
+  // 1. Try message.interaction.user (the person who ran /gstart)
+  let hostName = message.interaction?.user?.username || null;
+
+  // 2. Fallback: extract from embed
+  if (!hostName) hostName = extractHostFromEmbed(embed);
+
+  // 3. Last resort
+  if (!hostName) hostName = 'Unknown';
+
   const prize = embed.title || 'Giveaway';
   const prizeValue = parsePrizeValue(prize);
 
@@ -96,7 +97,7 @@ async function handleMessage(message) {
       guildId: message.guild.id,
       messageId: message.id,
       channelId: message.channel.id,
-      hostId: message.author.id,
+      hostId: hostName !== 'Unknown' ? message.interaction?.user?.id || message.author.id : message.author.id,
       hostName,
       prize,
       prizeValue,

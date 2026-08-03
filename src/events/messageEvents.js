@@ -7,11 +7,6 @@ const { handleMessage: trackGiveaway } = require('../handlers/giveawayTracker');
 module.exports = {
   name: Events.MessageCreate,
   async execute(message) {
-    // LOG EVERYTHING
-    const authorType = message.author.bot ? 'BOT' : 'HUMAN';
-    const webhook = message.webhookId ? ' WEBHOOK' : '';
-    console.log(`[MSG] ${authorType}${webhook} | ${message.author.username}#${message.author.discriminator} | embeds=${message.embeds?.length || 0} | content="${(message.content || '').slice(0, 80)}"`);
-
     if (!message.guild) return;
 
     if (message.author.bot) {
