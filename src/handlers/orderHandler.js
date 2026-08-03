@@ -55,7 +55,7 @@ async function processOrder(interaction) {
 
   const orderEmbed = new EmbedBuilder().setTitle(`New Order - ${interaction.user.tag}`).setDescription(`**Shulker Type:** ${shulkerType}\n**Quantity:** ${quantity}\n**When Needed:** ${whenNeeded}\n**Total Price:** ${formatted}`).setColor('#5865F2').setFooter({ text: `Order ID: ${order._id} | Status: Pending` }).setTimestamp();
   const confirmBtn = new ButtonBuilder().setCustomId(`order_confirm_${order._id}`).setLabel(`Confirm Order - ${formatted}`).setStyle(ButtonStyle.Success);
-  const readyBtn = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('User is Ready').setStyle(ButtonStyle.Primary);
+  const readyBtn = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('Order is Ready').setStyle(ButtonStyle.Primary);
   const row = new ActionRowBuilder().addComponents(confirmBtn, readyBtn);
   const sent = await ordersChannel.send({ embeds: [orderEmbed], components: [row] });
   order.orderChannelId = ordersChannelId; order.orderMessageId = sent.id; await order.save();
@@ -77,7 +77,7 @@ async function confirmOrder(interaction) {
     if (channel) { const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
       if (msg) { const emb = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Order ID: ${order._id} | Status: Processing` }).setColor('#FEE75C');
         const pb = new ButtonBuilder().setCustomId('order_processing').setLabel('Processing...').setStyle(ButtonStyle.Secondary).setDisabled(true);
-        const rb = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('User is Ready').setStyle(ButtonStyle.Primary);
+        const rb = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('Order is Ready').setStyle(ButtonStyle.Primary);
         const db = new ButtonBuilder().setCustomId(`order_done_S_${order._id}`).setLabel('Order Successful').setStyle(ButtonStyle.Success);
         await msg.edit({ embeds: [emb], components: [new ActionRowBuilder().addComponents(pb, rb, db)] }); }
     }
