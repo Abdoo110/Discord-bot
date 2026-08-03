@@ -1,44 +1,83 @@
 const Giveaway = require('../models/Giveaway');
 
-const GIVEAWAY_PATTERNS = ['giveaway', 'give away', 'give-away'];
+/**
+ * Detects giveaway messages from any bot.
+ * GiveawayBot uses timestamps like <t:...> with "Ends:"
+ */
 
-function isGiveawayEmbed(embed) {
-  const text = ((embed.title || '') + ' ' + (embed.description || '')).toLowerCase();
-  const extra = ((embed.author?.name || '') + ' ' + (embed.footer?.text || '')).toLowerCase();
-  return GIVEAWAY_PATTERNS.some(p => (text + ' ' + extra).includes(p));
+// Bot usernames that are known giveaway bots (lowercase)
+const GIVEAWAY_BOTS = [
+  'giveawaybot', 'mee6', 'dyno', 'carl-bot', 'carlbot',
+  'giveaway boat', 'prizebot', 'vibebot', 'cinnamon', 'arcane',
+  'santa', 'giveaway', 'donut\'s helper',
+];
+
+function isGiveawayBot(username) {
+  const lower = username.toLowerCase();
+  return GIVEAWAY_BOTS.some(b => lower.includes(b));
+}
+
+// Check if embed looks like a giveaway
+function looksLikeGiveaway(embed) {
+  const desc = (embed.description || '').toLowerCase();
+  const title = (embed.title || '').toLowerCase();
+  const combined = title + ' ' + desc + ' ' + (embed.footer?.text || '');
+
+  // Has timestamp like <t:...> with Ends/Winners/Prize
+  if (/<t:\d+:[RrFfDdTt]>/.test(embed.description || '') &&
+      /ends|winners|prize|entries/i.test(combined)) return true;
+
+  // Has giveaway keywords (in case some bots still use them)
+  if (/giveaway|give away|give-away/i.test(combined)) return true;
+
+  return false;
 }
 
 function extractHostName(embed) {
-  const desc = embed.description || '';
+  // Check footer first (GiveawayBot puts "Hosted by: @User" there)
   const footer = embed.footer?.text || '';
-  const combined = desc + ' ' + footer;
+  const m1 = footer.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  if (m1) return m1[1].trim();
 
-  const m = combined.match(/(?:hosted|created|requested|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
-  if (m) return m[1].trim();
+  // Check description
+  const desc = embed.description || '';
+  const m2 = desc.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  if (m2) return m2[1].trim();
 
-  if (footer && /^[a-z0-9_.]{2,32}$/i.test(footer.trim())) return footer.trim();
+  // Check embed fields for "Host" or "Hosted by"
+  if (embed.fields) {
+    for (const field of embed.fields) {
+      const fName = field.name.toLowerCase();
+      if (fName.includes('host')) return field.value.replace(/[@<>]/g, '');
+      const m3 = field.value.match(/(?:hosted|requested|created|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+      if (m3) return m3[1].trim();
+    }
+  }
+
+  // Check author
+  if (embed.author?.name) return embed.author.name;
+
   return null;
 }
 
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot) return;
 
-  // Log ALL bot messages even without embeds
-  if (!message.embeds?.length) {
-    console.log(`[TRACKER] Bot "${message.author.username}" — NO embeds. content="${(message.content||'').slice(0,80)}"`);
-    return;
+  // Dump full embed for ALL embeds from unknown bots
+  if (message.embeds?.length) {
+    const e = message.embeds[0];
+    const fields = (e.fields || []).map(f => `${f.name}=${f.value}`).join(' | ');
+    console.log(`[TRACKER] "${message.author.username}" | title="${e.title}" | desc="${(e.description||'').slice(0,80)}" | footer="${e.footer?.text||''}" | author="${e.author?.name||''}" | fields=[${fields}]`);
   }
+
+  if (!isGiveawayBot(message.author.username)) return;
+  if (!message.embeds?.length) return;
 
   const embed = message.embeds[0];
-  console.log(`[TRACKER] Bot "${message.author.username}" | title="${embed.title?.slice(0,60)}" | desc="${(embed.description||'').slice(0,60)}" | footer="${embed.footer?.text||''}" | author="${embed.author?.name||''}"`);
-
-  if (!isGiveawayEmbed(embed)) {
-    console.log(`[TRACKER] ❌ Not a giveaway embed`);
-    return;
-  }
+  if (!looksLikeGiveaway(embed)) return;
 
   const hostName = extractHostName(embed) || 'Unknown';
-  console.log(`[TRACKER] ✅ Giveaway detected! Host: ${hostName}`);
+  console.log(`[TRACKER] ✅ Giveaway by ${hostName}`);
 
   try {
     await Giveaway.create({
@@ -47,7 +86,7 @@ async function handleMessage(message) {
       channelId: message.channel.id,
       hostId: message.author.id,
       hostName,
-      prize: 'Giveaway',
+      prize: embed.title || 'Giveaway',
       winners: 1,
       durationMs: 3600000,
       endsAt: new Date(Date.now() + 3600000),

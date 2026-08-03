@@ -27,11 +27,11 @@ module.exports = {
       });
     }
 
-    // Count per host
     const hosts = {};
     for (const gw of giveaways) {
       const name = gw.hostName || 'Unknown';
-      hosts[name] = (hosts[name] || 0) + 1;
+      if (!hosts[name]) hosts[name] = 0;
+      hosts[name]++;
     }
 
     const sorted = Object.entries(hosts).sort((a, b) => b[1] - a[1]);
@@ -43,7 +43,17 @@ module.exports = {
       .setTimestamp();
 
     for (const [user, count] of sorted) {
-      embed.addFields({ name: user, value: `**${count}** giveaway${count > 1 ? 's' : ''}`, inline: true });
+      const prizes = giveaways
+        .filter(g => (g.hostName || 'Unknown') === user)
+        .map(g => g.prize)
+        .filter(p => p && p !== 'Giveaway');
+      
+      const prizeText = prizes.length ? ` — ${[...new Set(prizes)].slice(0, 3).join(', ')}` : '';
+      embed.addFields({
+        name: `${user}`,
+        value: `**${count}** giveaway${count > 1 ? 's' : ''}${prizeText}`,
+        inline: true
+      });
     }
 
     await interaction.editReply({ embeds: [embed] });
