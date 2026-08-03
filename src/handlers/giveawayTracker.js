@@ -64,10 +64,9 @@ function extractHostFromEmbed(embed) {
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot) return;
 
-  // Log ALL bot embeds for debugging
   if (message.embeds?.length) {
     const e = message.embeds[0];
-    const fields = (e.fields || []).map(f => `${f.name}=${f.value.slice(0,40)}`).join(' | ');
+    const fields = (e.fields || []).map(f => `${f.name}=${(f.value || '').slice(0,40)}`).join(' | ');
     const intUser = message.interaction?.user?.username || 'none';
     console.log(`[TRACKER] "${message.author.username}" | intUser=${intUser} | title="${e.title}" | footer="${e.footer?.text||''}" | author="${e.author?.name||''}" | fields=[${fields}]`);
   }
@@ -78,13 +77,8 @@ async function handleMessage(message) {
   const embed = message.embeds[0];
   if (!looksLikeGiveaway(embed)) return;
 
-  // 1. Try message.interaction.user (the person who ran /gstart)
   let hostName = message.interaction?.user?.username || null;
-
-  // 2. Fallback: extract from embed
   if (!hostName) hostName = extractHostFromEmbed(embed);
-
-  // 3. Last resort
   if (!hostName) hostName = 'Unknown';
 
   const prize = embed.title || 'Giveaway';
