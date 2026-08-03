@@ -3,6 +3,7 @@ const { checkSpam } = require('../handlers/antiAbuse');
 const { addSnipe } = require('../commands/moderation/snipe');
 const StickyMessage = require('../models/StickyMessage');
 const { handleMessage: trackGiveaway } = require('../handlers/giveawayTracker');
+const { handleMessage: trackPartner } = require('../handlers/partnerTracker');
 
 module.exports = {
   name: Events.MessageCreate,
@@ -18,6 +19,9 @@ module.exports = {
 
       // Human message → anti-spam
       await checkSpam(message).catch(() => {});
+
+      // Partner tracking (link-only)
+      await trackPartner(message).catch(() => {});
 
       // Prefix commands
       const GuildConfig = require('../models/GuildConfig');
