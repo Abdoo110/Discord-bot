@@ -5,11 +5,10 @@ const { getConfig } = require('../../utils/guildConfig');
 module.exports = {
   data: new SlashCommandBuilder()
     .setName('orderembed')
-    .setDescription('Create an order embed with stickers and an Order button')
+    .setDescription('Create an order embed with a sticker and an Order button')
     .addStringOption(o => o.setName('title').setDescription('Embed title').setRequired(true))
     .addStringOption(o => o.setName('description').setDescription('Embed description (single line)').setRequired(true))
-    .addStringOption(o => o.setName('sticker').setDescription('First sticker URL (right-click image → Copy Link)'))
-    .addStringOption(o => o.setName('sticker2').setDescription('Second sticker URL (right-click image → Copy Link)'))
+    .addAttachmentOption(o => o.setName('sticker').setDescription('Upload sticker/image'))
     .addChannelOption(o => o.setName('channel').setDescription('Channel to send to (default: current channel)'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .setDMPermission(false),
@@ -18,13 +17,21 @@ module.exports = {
     try {
       const title = interaction.options.getString('title');
       const desc = interaction.options.getString('description');
-      const s1 = interaction.options.getString('sticker');
-      const s2 = interaction.options.getString('sticker2');
+      const sticker = interaction.options.getAttachment('sticker');
       const channel = interaction.options.getChannel('channel') || interaction.channel;
 
       const cfg = await getConfig(interaction.guild.id);
       if (!cfg.channels.ordersChannel) {
         return error(interaction, 'Not Configured', 'Set the orders channel with /setchannel type:Orders Channel.');
+      }
+
+      const embed = new EmbedBuilder()
+        .setTitle(title)
+        .setDescription(desc)
+        .setColor('#5865F2');
+
+      if (sticker && sticker.contentType?.startsWith('image/')) {
+        embed.setImage(sticker.url);
       }
 
       const button = new ButtonBuilder()
@@ -34,12 +41,7 @@ module.exports = {
 
       const row = new ActionRowBuilder().addComponents(button);
 
-      const embeds = [];
-      if (s1) embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setImage(s1).setColor('#5865F2'));
-      if (s2) embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setImage(s2).setColor('#5865F2'));
-      if (embeds.length === 0) embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2'));
-
-      await channel.send({ embeds, components: [row] });
+      await channel.send({ embeds: [embed], components: [row] });
       await interaction.reply({ content: 'Order embed sent!', flags: MessageFlags.Ephemeral });
     } catch (err) {
       console.error('[ORDEREMBED]', err.stack || err.message);
