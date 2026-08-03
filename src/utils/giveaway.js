@@ -37,7 +37,8 @@ async function pickWinners(msg, giveaway, isReroll = false) {
   await msg.reply({ content: isReroll ? `🎉 **RE-ROLL WINNER(S):** ${winnerMentions}` : `🎉 **WINNER(S):** ${winnerMentions}`, embeds: [
     buildEmbed({ color: 'giveaway', title: `🎉 ${giveaway.prize}`, description: [
       `**Winner(s):** ${winnerMentions}`,
-      `**Hosted by:** <@${giveaway.hostId}>`,
+      `**Hosted By:** <@${giveaway.hostId}>`,
+      `**Participants:** ${entrants.length}`,
       isReroll ? '*This giveaway was re-rolled.*' : '',
     ].join('\n'), timestamp: Date.now() })
   ]});
@@ -53,12 +54,10 @@ async function pickWinners(msg, giveaway, isReroll = false) {
     title: `🎉 ${giveaway.prize} (ENDED)`,
     description: [
       `**Winner(s):** ${winnerMentions}`,
-      `**Hosted by:** <@${giveaway.hostId}>`,
-      `**Entries:** ${entrants.length}`,
+      `**Hosted By:** <@${giveaway.hostId}>`,
+      `**Participants:** ${entrants.length}`,
       isReroll ? '*Re-rolled.*' : '',
     ].join('\n'),
-    footer: 'Ended at',
-    timestamp: new Date(),
   });
   try {
     await msg.edit({ embeds: [origEmbed], components: [] });

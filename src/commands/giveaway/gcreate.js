@@ -32,18 +32,13 @@ module.exports = {
       color: 'giveaway',
       title: `🎉 ${prize}`,
       description: [
-        `Click the 🎉 button below to enter!`,
-        `**Winners:** ${winners}`,
+        `**Hosted By:** ${interaction.user}`,
+        `**Participants:** 0`,
         `**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
-        requirements ? `**Requirements:** ${requirements}` : '',
-        '',
-        `**Hosted by:** ${interaction.user.tag}`,
       ].join('\n'),
-      footer: 'Ends at',
-      timestamp: endsAt,
     });
 
-    await interaction.reply({ content: '🎉 **GIVEAWAY** 🎉', embeds: [embed], fetchReply: true });
+    await interaction.reply({ embeds: [embed], fetchReply: true });
     const msg = await interaction.fetchReply();
 
     await Giveaway.create({
@@ -61,7 +56,6 @@ module.exports = {
 
     const button = new ButtonBuilder()
       .setCustomId(`giveaway_enter_${msg.id}`)
-      .setLabel('Enter')
       .setEmoji('🎉')
       .setStyle(ButtonStyle.Primary);
 

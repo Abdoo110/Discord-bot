@@ -62,6 +62,22 @@ client.on(Events.InteractionCreate, async (interaction) => {
         giveaway.entrants.push(interaction.user.id);
         await giveaway.save();
 
+        try {
+          const msg = await interaction.channel.messages.fetch(messageId);
+          const embed = msg.embeds[0];
+          if (embed) {
+            const newDesc = embed.description
+              .replace(/\*\*Participants:\*\* \d+/, `**Participants:** ${giveaway.entrants.length}`);
+            await msg.edit({ embeds: [
+              require('./utils/embed').buildEmbed({
+                color: 'giveaway',
+                title: embed.title,
+                description: newDesc,
+              })
+            ]});
+          }
+        } catch (_) {}
+
         await interaction.reply({ content: '🎉 **You entered the giveaway!** Good luck!', flags: MessageFlags.Ephemeral });
       } catch (err) {
         console.error('[GIVEAWAY-BUTTON] Error:', err.message);
