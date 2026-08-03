@@ -94,6 +94,15 @@ client.on(Events.ChannelDelete, channelDeleteHandler.execute);
 client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
 client.on(Events.GuildBanAdd, banAddHandler.execute);
 
+// DIRECT giveaway tracker — separate listener bypassing messageEvents
+const { handleMessage: directGiveawayTrack } = require('./handlers/giveawayTracker');
+client.on(Events.MessageCreate, async (message) => {
+  console.log(`[DIRECT] ${message.author.bot ? 'BOT' : 'HUMAN'} | ${message.author.username} | channel=${message.channelId} | embeds=${message.embeds?.length || 0} | webhook=${!!message.webhookId} | content="${(message.content || '').slice(0, 60)}"`);
+  if (message.guild && message.author.bot) {
+    await directGiveawayTrack(message);
+  }
+});
+
 // Giveaway auto-end checker (check every 15 seconds)
 const Giveaway = require('./models/Giveaway');
 const { pickWinners } = require('./utils/giveaway');
