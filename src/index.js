@@ -6,7 +6,7 @@ const config = require('./config');
 const { loadCommands } = require('./handlers/commandHandler');
 const { deployCommands } = require('./deploy-commands');
 
-// ─── Crash Protection ──────────────────────
+// Crash Protection
 process.on('unhandledRejection', (reason) => {
   console.error(chalk.red('[CRASH] Unhandled Rejection:'), reason?.stack || reason);
 });
@@ -14,7 +14,7 @@ process.on('uncaughtException', (err) => {
   console.error(chalk.red('[CRASH] Uncaught Exception:'), err.stack || err);
 });
 
-// ─── Client Setup ──────────────────────────
+// Client Setup
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -38,7 +38,7 @@ const client = new Client({
 
 client.commands = loadCommands();
 
-// ─── MongoDB Connection ────────────────────
+// MongoDB Connection
 mongoose.set('strictQuery', false);
 async function connectDB() {
   try {
@@ -50,13 +50,12 @@ async function connectDB() {
   }
 }
 
-// ─── Event Handling ────────────────────────
-
+// Event Handling
 client.once(Events.ClientReady, async () => {
   console.log(chalk.cyan('╔══════════════════════════════════╗'));
   console.log(chalk.cyan(`║   🤖 Logged in as ${chalk.bold(client.user.tag)}`));
   console.log(chalk.cyan(`║   🌐 Serving ${chalk.bold(client.guilds.cache.size)} guild(s)`));
-  console.log(chalk.cyan('║   ⚡ Bot is online & ready!'));
+  console.log(chalk.cyan('║   ⚡ Bot is online and ready!'));
   console.log(chalk.cyan('╚══════════════════════════════════╝'));
 
   client.user.setPresence({
@@ -77,7 +76,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.error(chalk.red(`❌ /${interaction.commandName}:`), error.message);
     const { buildEmbed } = require('./utils/embed');
     const reply = {
-      embeds: [buildEmbed({ color: 'error', title: '❌ Error', description: 'Something went wrong.' })],
+      embeds: [buildEmbed({ color: 'error', title: 'Error', description: 'Something went wrong.' })],
       flags: MessageFlags.Ephemeral
     };
     if (interaction.replied || interaction.deferred) await interaction.followUp(reply);
@@ -85,7 +84,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 });
 
-// Message events (prefix, anti-spam, snipe, sticky, giveaway tracking)
+// Message events
 const {
   messageHandler, snipeHandler, stickyHandler,
   memberAddHandler, channelDeleteHandler, roleDeleteHandler, banAddHandler,
@@ -99,7 +98,7 @@ client.on(Events.ChannelDelete, channelDeleteHandler.execute);
 client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
 client.on(Events.GuildBanAdd, banAddHandler.execute);
 
-// Giveaway auto-end checker (every 30s to reduce load)
+// Giveaway auto-end checker
 const Giveaway = require('./models/Giveaway');
 if (Giveaway) {
   setInterval(async () => {
@@ -120,7 +119,7 @@ if (Giveaway) {
   }, 30000);
 }
 
-// ─── Start ─────────────────────────────────
+// Start
 (async () => {
   try {
     await connectDB();
@@ -134,8 +133,8 @@ if (Giveaway) {
 
 // Graceful shutdown
 process.on('SIGINT', async () => {
-  console.log(chalk.yellow('
-🛑 Shutting down...'));
+  console.log('');
+  console.log(chalk.yellow('🛑 Shutting down...'));
   await mongoose.disconnect();
   client.destroy();
   process.exit(0);
