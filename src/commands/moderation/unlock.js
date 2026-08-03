@@ -1,4 +1,4 @@
-const { SlashCommandBuilder, ChannelType } = require('discord.js');
+const { SlashCommandBuilder, ChannelType, PermissionFlagsBits } = require('discord.js');
 const { success, error } = require('../../utils/embed');
 
 module.exports = {
@@ -7,7 +7,8 @@ module.exports = {
     .setDescription('Unlock a channel (restores sending permissions)')
     .addChannelOption(o => o.setName('channel').setDescription('Channel to unlock (defaults to current)').addChannelTypes(ChannelType.GuildText))
     .addStringOption(o => o.setName('reason').setDescription('Reason for unlocking'))
-    .setDMPermission(false),
+    .setDMPermission(false)
+    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel') || interaction.channel;
