@@ -63,6 +63,7 @@ async function processOrder(interaction) {
 }
 
 async function confirmOrder(interaction) {
+  console.log(`[ORDER] confirmOrder clicked by ${interaction.user.tag} (${interaction.user.id})`);
   if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
   const orderId = interaction.customId.slice('order_confirm_'.length);
   const order = await Order.findById(orderId);
@@ -75,7 +76,8 @@ async function confirmOrder(interaction) {
   try {
     const channel = interaction.guild.channels.cache.get(order.orderChannelId);
     if (channel) { const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
-      if (msg) { const emb = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Order ID: ${order._id} | Status: Processing` }).setColor('#FEE75C');
+      if (msg) { const oldDesc = EmbedBuilder.from(msg.embeds[0]).data.description || '';
+        const emb = EmbedBuilder.from(msg.embeds[0]).setDescription(oldDesc + `\n\n**Processing by ${interaction.user.tag}**`).setFooter({ text: `Order ID: ${order._id} | Status: Processing` }).setColor('#FEE75C');
         const pb = new ButtonBuilder().setCustomId('order_processing').setLabel('Processing...').setStyle(ButtonStyle.Secondary).setDisabled(true);
         const rb = new ButtonBuilder().setCustomId(`order_ready_${order._id}`).setLabel('Order is Ready').setStyle(ButtonStyle.Primary);
         const db = new ButtonBuilder().setCustomId(`order_done_S_${order._id}`).setLabel('Order Successful').setStyle(ButtonStyle.Success);
@@ -83,10 +85,11 @@ async function confirmOrder(interaction) {
     }
   } catch (_) {}
 
-  await interaction.reply({ content: 'Order confirmed - user DMed.', flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: `Order confirmed by **${interaction.user.tag}** - user DMed.`, flags: MessageFlags.Ephemeral });
 }
 
 async function userReady(interaction) {
+  console.log(`[ORDER] userReady clicked by ${interaction.user.tag} (${interaction.user.id})`);
   if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
   const orderId = interaction.customId.slice('order_ready_'.length);
   const order = await Order.findById(orderId);
@@ -97,7 +100,8 @@ async function userReady(interaction) {
   try {
     const channel = interaction.guild.channels.cache.get(order.orderChannelId);
     if (channel) { const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
-      if (msg) { const emb = EmbedBuilder.from(msg.embeds[0]).setFooter({ text: `Order ID: ${order._id} | Status: Ready` }).setColor('#57F287');
+      if (msg) { const oldDesc = EmbedBuilder.from(msg.embeds[0]).data.description || '';
+        const emb = EmbedBuilder.from(msg.embeds[0]).setDescription(oldDesc + `\n\n**Ready by ${interaction.user.tag}**`).setFooter({ text: `Order ID: ${order._id} | Status: Ready` }).setColor('#57F287');
         const sm = new ButtonBuilder().setCustomId(`order_msg_S_${order._id}`).setLabel('Send Message').setStyle(ButtonStyle.Primary);
         const os = new ButtonBuilder().setCustomId(`order_done_S_${order._id}`).setLabel('Order Successful').setStyle(ButtonStyle.Success);
         await msg.edit({ embeds: [emb], components: [new ActionRowBuilder().addComponents(sm, os)] }); }
@@ -112,7 +116,7 @@ async function userReady(interaction) {
     await dm.send({ embeds: [dmEmbed], components: [new ActionRowBuilder().addComponents(sm, cf)] });
   } catch (_) {}
 
-  await interaction.reply({ content: 'User DMed with messaging & confirmation buttons.', flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: `Order marked ready by **${interaction.user.tag}**.`, flags: MessageFlags.Ephemeral });
 }
 
 async function openMessageModal(interaction, sender) {
