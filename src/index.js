@@ -94,21 +94,6 @@ client.on(Events.ChannelDelete, channelDeleteHandler.execute);
 client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
 client.on(Events.GuildBanAdd, banAddHandler.execute);
 
-// Giveaway reaction tracking
-const { handleReactionAdd, handleReactionRemove } = require('./handlers/giveawayTracker');
-client.on(Events.MessageReactionAdd, async (reaction, user) => {
-  if (reaction.partial) {
-    try { await reaction.fetch(); } catch (_) { return; }
-  }
-  await handleReactionAdd(reaction, user);
-});
-client.on(Events.MessageReactionRemove, async (reaction, user) => {
-  if (reaction.partial) {
-    try { await reaction.fetch(); } catch (_) { return; }
-  }
-  await handleReactionRemove(reaction, user);
-});
-
 // Giveaway auto-end checker (check every 15 seconds)
 const Giveaway = require('./models/Giveaway');
 const { pickWinners } = require('./utils/giveaway');
