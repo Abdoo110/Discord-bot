@@ -26,13 +26,18 @@ module.exports = {
       return error(interaction, 'Not Configured', 'Set the orders channel with /setchannel type:Orders Channel.');
     }
 
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(desc)
-      .setColor('#5865F2');
+    const embeds = [];
 
-    if (sticker && sticker.contentType?.startsWith('image/')) embed.setImage(sticker.url);
-    if (sticker2 && sticker2.contentType?.startsWith('image/')) embed.setThumbnail(sticker2.url);
+    if (sticker && sticker2 && sticker.contentType?.startsWith('image/') && sticker2.contentType?.startsWith('image/')) {
+      embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2').setImage(sticker.url));
+      embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2').setImage(sticker2.url));
+    } else if (sticker && sticker.contentType?.startsWith('image/')) {
+      embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2').setImage(sticker.url));
+    } else if (sticker2 && sticker2.contentType?.startsWith('image/')) {
+      embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2').setImage(sticker2.url));
+    } else {
+      embeds.push(new EmbedBuilder().setTitle(title).setDescription(desc).setColor('#5865F2'));
+    }
 
     const button = new ButtonBuilder()
       .setCustomId('order_create')
@@ -41,7 +46,7 @@ module.exports = {
 
     const row = new ActionRowBuilder().addComponents(button);
 
-    await channel.send({ embeds: [embed], components: [row] });
+    await channel.send({ embeds, components: [row] });
     await interaction.reply({ content: 'Order embed sent!', flags: MessageFlags.Ephemeral });
   },
 };
