@@ -11,6 +11,7 @@ module.exports = {
 
     // Track giveaways from bot messages
     if (message.author.bot) {
+      console.log(`[MSG-EVENTS] Bot message: ${message.author.username} | hasEmbeds=${!!message.embeds?.length} | hasContent=${!!message.content} | content="${(message.content||'').slice(0,100)}"`);
       await trackGiveaway(message);
       return;
     }
@@ -53,12 +54,10 @@ const stickyHandler = {
     const sticky = await StickyMessage.findOne({ guildId: message.guild.id, channelId: message.channel.id });
     if (!sticky) return;
 
-    // Don't repost too often — check last sticky message age
     try {
       const lastMsg = await message.channel.messages.fetch(sticky.messageId);
-      if (lastMsg) return; // still there
+      if (lastMsg) return;
     } catch (_) {
-      // Sticky message was deleted — repost
       const { buildEmbed } = require('../utils/embed');
       const newMsg = await message.channel.send({ embeds: [
         buildEmbed({ color: 'info', title: '📌 Sticky Message', description: sticky.content, footer: 'Sticky' })
