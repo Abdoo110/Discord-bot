@@ -31,7 +31,11 @@ module.exports = {
     // Group by host: { name → { count, totalValue } }
     const hosts = {};
     for (const gw of giveaways) {
-      const name = gw.hostName || 'Unknown';
+      let name = gw.hostName;
+      if (!name) {
+        const member = interaction.guild.members.cache.get(gw.hostId);
+        name = member ? member.user.username : 'Unknown';
+      }
       if (!hosts[name]) hosts[name] = { count: 0, totalValue: 0 };
       hosts[name].count++;
       hosts[name].totalValue += gw.prizeValue || 0;
