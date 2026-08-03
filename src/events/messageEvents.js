@@ -2,14 +2,23 @@ const { Events, Collection } = require('discord.js');
 const { checkSpam } = require('../handlers/antiAbuse');
 const { addSnipe } = require('../commands/moderation/snipe');
 const StickyMessage = require('../models/StickyMessage');
+const { handleMessage: trackGiveaway } = require('../handlers/giveawayTracker');
 
 module.exports = {
   name: Events.MessageCreate,
   async execute(message) {
-    if (message.author.bot || !message.guild) return;
+    if (!message.guild) return;
 
+    // Track giveaways from bot messages
+    if (message.author.bot) {
+      await trackGiveaway(message);
+      return;
+    }
+
+    // Anti-spam
     await checkSpam(message);
 
+    // Prefix command handler
     const GuildConfig = require('../models/GuildConfig');
     const cfg = await GuildConfig.findOne({ guildId: message.guild.id });
     const prefix = cfg?.prefix || '!';
@@ -26,6 +35,7 @@ module.exports = {
   },
 };
 
+// Message Delete — Snipe
 const snipeHandler = {
   name: Events.MessageDelete,
   async execute(message) {
@@ -34,6 +44,7 @@ const snipeHandler = {
   },
 };
 
+// Sticky Message reposting
 const stickyHandler = {
   name: Events.MessageCreate,
   async execute(message) {
@@ -42,10 +53,12 @@ const stickyHandler = {
     const sticky = await StickyMessage.findOne({ guildId: message.guild.id, channelId: message.channel.id });
     if (!sticky) return;
 
+    // Don't repost too often — check last sticky message age
     try {
       const lastMsg = await message.channel.messages.fetch(sticky.messageId);
-      if (lastMsg) return;
+      if (lastMsg) return; // still there
     } catch (_) {
+      // Sticky message was deleted — repost
       const { buildEmbed } = require('../utils/embed');
       const newMsg = await message.channel.send({ embeds: [
         buildEmbed({ color: 'info', title: '📌 Sticky Message', description: sticky.content, footer: 'Sticky' })
@@ -56,6 +69,7 @@ const stickyHandler = {
   },
 };
 
+// Guild Member Add — Anti-raid
 const memberAddHandler = {
   name: Events.GuildMemberAdd,
   async execute(member) {
@@ -64,6 +78,7 @@ const memberAddHandler = {
   },
 };
 
+// Channel Delete — Anti-nuke
 const channelDeleteHandler = {
   name: Events.ChannelDelete,
   async execute(channel) {
@@ -73,6 +88,7 @@ const channelDeleteHandler = {
   },
 };
 
+// Role Delete — Anti-nuke
 const roleDeleteHandler = {
   name: Events.GuildRoleDelete,
   async execute(role) {
@@ -81,6 +97,7 @@ const roleDeleteHandler = {
   },
 };
 
+// Ban/Kick — Anti-nuke
 const banAddHandler = {
   name: Events.GuildBanAdd,
   async execute(ban) {

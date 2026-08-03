@@ -13,34 +13,48 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent,
     GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildMessageReactions,
     GatewayIntentBits.GuildModeration,
-  ]
+    GatewayIntentBits.GuildMessageReactions,
+  ],
+  partials: [],
 });
 
-client.commands = new Collection();
+// Load slash commands
+client.commands = loadCommands();
 
-// ─── Database Connection ───────────────────
-mongoose.connect(process.env.MONGODB_URI || 'mongodb+srv://abdooessied_db_user:Abdopass123@cluster0.axiocip.mongodb.net/discord-bot?retryWrites=true&w=majority')
-  .then(() => console.log(chalk.green('✅ Connected to MongoDB')))
-  .catch(err => console.error(chalk.red('❌ MongoDB connection error:'), err));
+// ─── MongoDB Connection ────────────────────
+mongoose.set('strictQuery', false);
 
-// ─── Ready Event ───────────────────────────
-client.once(Events.ClientReady, async (c) => {
-  console.log(chalk.cyan(`🚀 ${c.user.tag} is online!`));
+async function connectDB() {
+  try {
+    await mongoose.connect(config.mongoUri);
+    console.log(chalk.green('✅ Connected to MongoDB'));
+  } catch (err) {
+    console.error(chalk.red('❌ MongoDB connection error:'), err.message);
+    process.exit(1);
+  }
+}
 
-  await loadCommands(client);
-  await deployCommands();
+// ─── Event Handling ────────────────────────
 
-  // Load sticky message handler
-  require('./handlers/stickyHandler')(client);
+client.once(Events.ClientReady, async () => {
+  console.log('');
+  console.log(chalk.cyan('╔══════════════════════════════════╗'));
+  console.log(chalk.cyan(`║   🤖 Logged in as ${chalk.bold(client.user.tag)}`));
+  console.log(chalk.cyan(`║   🌐 Serving ${chalk.bold(client.guilds.cache.size)} guild(s)`));
+  console.log(chalk.cyan('║   ⚡ Bot is online & ready!'));
+  console.log(chalk.cyan('╚══════════════════════════════════╝'));
+  console.log('');
 
-  // Load anti-abuse
-  require('./handlers/antiAbuse')(client);
+  // Set status
+  client.user.setPresence({
+    activities: [{ name: `${client.guilds.cache.size} servers | /commands`, type: 3 }], // Watching
+    status: 'online',
+  });
 });
 
-// ─── Interaction Handler ───────────────────
-client.on(Events.InteractionCreate, async interaction => {
+// Slash command handler
+client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
 
   const command = client.commands.get(interaction.commandName);
@@ -61,41 +75,81 @@ client.on(Events.InteractionCreate, async interaction => {
   }
 });
 
-// ─── Anti-Nuke: Anti-Bot Join ──────────────
-client.on(Events.GuildMemberAdd, async member => {
-  if (!member.user.bot) return;
+// Message events (prefix, anti-spam, snipe, sticky)
+const {
+  messageHandler,
+  snipeHandler,
+  stickyHandler,
+  memberAddHandler,
+  channelDeleteHandler,
+  roleDeleteHandler,
+  banAddHandler,
+} = require('./events/messageEvents');
 
-  const guildConfig = require('./utils/guildConfig');
-  const cfg = await guildConfig.getConfig(member.guild.id);
+client.on(Events.MessageCreate, messageHandler.execute);
+client.on(Events.MessageDelete, snipeHandler.execute);
+client.on(Events.MessageCreate, stickyHandler.execute);
+client.on(Events.GuildMemberAdd, memberAddHandler.execute);
+client.on(Events.ChannelDelete, channelDeleteHandler.execute);
+client.on(Events.GuildRoleDelete, roleDeleteHandler.execute);
+client.on(Events.GuildBanAdd, banAddHandler.execute);
 
-  if (!cfg.antiNuke?.enabled) return;
-
-  const { EmbedBuilder } = require('discord.js');
-  const logChannel = member.guild.channels.cache.get(cfg.channels?.modLogs);
-  if (logChannel) {
-    logChannel.send({
-      embeds: [
-        new EmbedBuilder()
-          .setColor('Orange')
-          .setTitle('⚠️ Suspicious Bot Joined')
-          .setDescription(`Bot ${member.user.tag} (${member.id}) joined but no ban/purge action was configured.`)
-          .setTimestamp()
-      ]
-    });
+// Giveaway reaction tracking
+const { handleReactionAdd, handleReactionRemove } = require('./handlers/giveawayTracker');
+client.on(Events.MessageReactionAdd, async (reaction, user) => {
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch (_) { return; }
   }
+  await handleReactionAdd(reaction, user);
+});
+client.on(Events.MessageReactionRemove, async (reaction, user) => {
+  if (reaction.partial) {
+    try { await reaction.fetch(); } catch (_) { return; }
+  }
+  await handleReactionRemove(reaction, user);
 });
 
-// ─── Anti-Spam ────────────────────────────
-client.on(Events.MessageCreate, async message => {
-  if (message.author.bot || !message.guild) return;
+// Giveaway auto-end checker (check every 15 seconds)
+const Giveaway = require('./models/Giveaway');
+const { pickWinners } = require('./utils/giveaway');
 
-  const guildConfig = require('./utils/guildConfig');
-  const cfg = await guildConfig.getConfig(message.guild.id);
+setInterval(async () => {
+  try {
+    const endedGiveaways = await Giveaway.find({ ended: false, endsAt: { $lte: new Date() } });
 
-  if (cfg.antiSpam?.enabled) {
-    const { default: AntiSpam } = await import('./handlers/antiSpam.js');
-    AntiSpam(message, cfg.antiSpam);
-  }
+    for (const giveaway of endedGiveaways) {
+      const guild = client.guilds.cache.get(giveaway.guildId);
+      if (!guild) continue;
+
+      const channel = guild.channels.cache.get(giveaway.channelId);
+      if (!channel) continue;
+
+      try {
+        const msg = await channel.messages.fetch(giveaway.messageId);
+        await pickWinners(msg, giveaway);
+      } catch (_) {
+        giveaway.ended = true;
+        giveaway.winnerIds = [];
+        await giveaway.save();
+      }
+    }
+  } catch (_) {}
+}, 15000);
+
+// ─── Start Bot ─────────────────────────────
+async function start() {
+  await connectDB();
+  // Auto-deploy slash commands on startup
+  await deployCommands();
+  await client.login(config.token);
+}
+
+start();
+
+// Graceful shutdown
+process.on('SIGINT', async () => {
+  console.log(chalk.yellow('\n🛑 Shutting down...'));
+  await mongoose.disconnect();
+  client.destroy();
+  process.exit(0);
 });
-
-client.login(process.env.DISCORD_TOKEN);
