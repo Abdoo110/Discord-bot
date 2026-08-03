@@ -22,12 +22,12 @@ module.exports = {
     const embed = buildEmbed({
       color: 'info',
       title: '📢 Activity Check',
-      description: `${role}\n\n${customMsg}\n\nReact with ✅ to confirm your activity!`,
+      description: `${customMsg}\n\nReact with ✅ to confirm your activity!`,
       footer: `Activity check by ${interaction.user.tag}`,
       timestamp: Date.now(),
     });
 
-    const msg = await interaction.channel.send({ embeds: [embed] });
+    const msg = await interaction.channel.send({ content: `${role}`, embeds: [embed] });
     await msg.react('✅');
 
     await interaction.reply({ embeds: [
