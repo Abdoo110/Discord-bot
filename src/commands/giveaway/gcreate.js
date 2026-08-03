@@ -56,6 +56,7 @@ module.exports = {
       winners,
       durationMs,
       endsAt,
+      entrants: [],
     });
 
     const button = new ButtonBuilder()

@@ -145,7 +145,7 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
       } catch (err) {
         console.error('[AUTO-END] Check error:', err.message);
       }
-    }, 30000);
+    }, 5000);
   } catch (err) {
     console.error(chalk.red('❌ Startup failed:'), err.stack || err.message);
     process.exit(1);

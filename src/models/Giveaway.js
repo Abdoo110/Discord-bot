@@ -12,7 +12,7 @@ const giveawaySchema = new mongoose.Schema({
   durationMs: { type: Number, required: true },
   endsAt: { type: Date, required: true },
   ended: { type: Boolean, default: false },
-  entrants: [{ type: String }],
+  entrants: { type: [{ type: String }], default: [] },
   winnerIds: [{ type: String }],
   rerolled: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
