@@ -40,24 +40,39 @@ function formatValue(n) {
 }
 
 function extractHostFromEmbed(embed) {
-  const footer = embed.footer?.text || '';
-  const desc = embed.description || '';
+  const stripMd = (str) => str.replace(/\*\*/g, '').replace(/\*/g, '').replace(/__/g, '').replace(/_/g, '').replace(/~~/g, '');
 
-  const m1 = footer.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
-  if (m1) return m1[1].trim();
+  const footer = stripMd(embed.footer?.text || '');
+  const desc = stripMd(embed.description || '');
 
-  const m2 = desc.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
-  if (m2) return m2[1].trim();
+  const tryPatterns = (text) => {
+    let m = text.match(/(?:hosted|requested|created|started)\s+by\s*:?\s*@?([\S]{2,32})/i);
+    if (m && !/\b(bot|giveaway|ends?|winners?|prize|entries?|react|enter)\b/i.test(m[1])) return m[1];
+    m = text.match(/by\s+@?([\S]{2,32})\s*$/im);
+    if (m && !/\b(bot|giveaway|ends?|winners?|prize|entries?|react|enter)\b/i.test(m[1])) return m[1];
+    return null;
+  };
+
+  const fromFooter = tryPatterns(footer);
+  if (fromFooter) return fromFooter;
+
+  const fromDesc = tryPatterns(desc);
+  if (fromDesc) return fromDesc;
 
   if (embed.fields) {
     for (const field of embed.fields) {
-      if (/host/i.test(field.name)) return field.value.replace(/[@<>]/g, '').trim();
-      const m3 = field.value.match(/(?:hosted|requested|created|started)\s+by\s+@?([\w\s]{2,32})/i);
-      if (m3) return m3[1].trim();
+      const fName = stripMd(field.name || '');
+      const fVal = stripMd(field.value || '');
+      if (/host/i.test(fName)) return fVal.replace(/[@<>]/g, '').trim().slice(0, 32);
+      const m = tryPatterns(fVal);
+      if (m) return m;
     }
   }
 
-  if (embed.author?.name && !/giveaway/i.test(embed.author.name)) return embed.author.name;
+  if (embed.author?.name && !/\b(bot|giveaway|prize)\b/i.test(embed.author.name)) {
+    return embed.author.name.replace(/[@<>]/g, '').trim().slice(0, 32);
+  }
+
   return null;
 }
 
@@ -78,20 +93,23 @@ async function handleMessage(message) {
   if (!looksLikeGiveaway(embed)) return;
 
   let hostName = message.interaction?.user?.username || null;
+  let hostId = message.interaction?.user?.id || null;
+
   if (!hostName) hostName = extractHostFromEmbed(embed);
   if (!hostName) hostName = 'Unknown';
+  if (!hostId) hostId = message.author.id;
 
   const prize = embed.title || 'Giveaway';
   const prizeValue = parsePrizeValue(prize);
 
-  console.log(`[TRACKER] ✅ Giveaway by ${hostName} — prize="${prize}" (${formatValue(prizeValue) || 'non-numeric'})`);
+  console.log(`[TRACKER] ✅ Giveaway by ${hostName} (${hostId}) — prize="${prize}" (${formatValue(prizeValue) || 'non-numeric'})`);
 
   try {
     await Giveaway.create({
       guildId: message.guild.id,
       messageId: message.id,
       channelId: message.channel.id,
-      hostId: hostName !== 'Unknown' ? message.interaction?.user?.id || message.author.id : message.author.id,
+      hostId,
       hostName,
       prize,
       prizeValue,
