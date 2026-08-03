@@ -1,58 +1,65 @@
 const Giveaway = require('../models/Giveaway');
 
 /**
- * Detects giveaway embeds from any bot and extracts who HOSTED it.
- * Most giveaway bots put the host in the embed footer or description.
+ * Detects giveaway messages from any bot.
+ * Most giveaway bots use embeds with "giveaway" in the title/description,
+ * or post a message that gets a 🎉 reaction from the bot itself.
  */
 
-const GIVEAWAY_PATTERNS = ['giveaway', 'give away', '🎉'];
+const GIVEAWAY_PATTERNS = ['giveaway', 'give away', '🎉', 'give-away'];
 
 function isGiveawayEmbed(embed) {
   const text = ((embed.title || '') + ' ' + (embed.description || '')).toLowerCase();
-  return GIVEAWAY_PATTERNS.some(p => text.includes(p));
+  // Also check author name and footer
+  const extra = ((embed.author?.name || '') + ' ' + (embed.footer?.text || '')).toLowerCase();
+  return GIVEAWAY_PATTERNS.some(p => (text + ' ' + extra).includes(p));
 }
 
-/**
- * Try to find the human who started the giveaway.
- * Giveaway bots typically put the host in:
- * - Footer text: "Requested by @User" / "Hosted by User"
- * - Description field: "Hosted by: @User"
- * If we find a mention <@ID>, return that ID.
- * Otherwise return the username string.
- */
 function extractHost(embed) {
   const desc = embed.description || '';
   const footer = embed.footer?.text || '';
   const combined = desc + ' ' + footer;
 
-  // 1. Try <@ID> mention — most reliable
+  // <@ID> mention
   const mention = combined.match(/<@!?(\d+)>/);
-  if (mention) return { hostId: mention[1], hostName: null };
+  if (mention) return mention[1];
 
-  // 2. "Hosted by Username" / "Created by Username" / "Requested by Username"
-  const nameMatch = combined.match(/(?:hosted|created|requested|started)\s+by\s+@?([a-z0-9_.]{2,32})/i);
-  if (nameMatch) return { hostId: null, hostName: nameMatch[1] };
+  // "Hosted/Created/Requested/Started by Name"
+  const m = combined.match(/(?:hosted|created|requested|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  if (m) return null;
 
-  // 3. Just "@Username" at the end of a line
-  const atMatch = combined.match(/@([a-z0-9_.]{2,32})\s*$/im);
-  if (atMatch) return { hostId: null, hostName: atMatch[1] };
+  return null;
+}
 
-  // 4. Fallback: use footer text if it looks like a username
-  if (footer && /^[a-z0-9_.]{2,32}$/i.test(footer)) {
-    return { hostId: null, hostName: footer };
-  }
+function extractHostName(embed) {
+  const desc = embed.description || '';
+  const footer = embed.footer?.text || '';
+  const combined = desc + ' ' + footer;
 
-  return { hostId: null, hostName: null };
+  // "Hosted by Name"
+  const m = combined.match(/(?:hosted|created|requested|started)\s+by\s+@?([a-z0-9_.\s]{2,32})/i);
+  if (m) return m[1].trim();
+
+  // If footer is just a username
+  if (footer && /^[a-z0-9_.]{2,32}$/i.test(footer.trim())) return footer.trim();
+
+  return null;
 }
 
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot || !message.embeds?.length) return;
 
   const embed = message.embeds[0];
+
+  // DEBUG
+  console.log(`[TRACKER] Bot message from ${message.author.username}: title="${embed.title}", desc="${(embed.description||'').slice(0,60)}", footer="${embed.footer?.text||''}"`);
+
   if (!isGiveawayEmbed(embed)) return;
 
-  const { hostId, hostName } = extractHost(embed);
-  const name = hostName || 'Unknown';
+  const hostId = extractHost(embed);
+  const hostName = extractHostName(embed) || 'Unknown';
+
+  console.log(`[TRACKER] ✅ Detected giveaway! Host: ${hostName}`);
 
   try {
     await Giveaway.create({
@@ -60,7 +67,7 @@ async function handleMessage(message) {
       messageId: message.id,
       channelId: message.channel.id,
       hostId: hostId || message.author.id,
-      hostName: name,
+      hostName,
       prize: 'Giveaway',
       winners: 1,
       durationMs: 3600000,
@@ -68,8 +75,7 @@ async function handleMessage(message) {
       createdAt: new Date(),
     });
   } catch (err) {
-    // ignore duplicate key errors
-    if (err.code !== 11000) { /* noop */ }
+    if (err.code !== 11000) console.error('[TRACKER] DB Error:', err.message);
   }
 }
 
