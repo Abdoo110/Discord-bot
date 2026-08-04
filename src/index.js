@@ -210,12 +210,13 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
       const elapsed = Date.now() - gw.endsAt.getTime();
       const remaining = gw.claimTimeMs - elapsed;
       if (remaining > 0) {
-        scheduleClaimExpiry(client, gw._id, remaining);
+        scheduleClaimExpiry(client, gw._id, remaining, gw.claimMessageId);
       } else {
         try {
           const channel = await client.channels.fetch(gw.channelId).catch(() => null);
           if (channel) {
-            const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+            const msgId = gw.claimMessageId || gw.messageId;
+            const msg = await channel.messages.fetch(msgId).catch(() => null);
             if (msg && msg.embeds[0]) {
               const { EmbedBuilder } = require('discord.js');
               const oldTitle = EmbedBuilder.from(msg.embeds[0]).data.title || '';

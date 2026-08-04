@@ -41,14 +41,20 @@ async function pickWinners(msg, giveaway, isReroll = false) {
 
   const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
 
-  await msg.reply({ content: isReroll ? `Re-roll Winner(s): ${winnerMentions}` : `Winner(s): ${winnerMentions}`, embeds: [
+  const claimBtn = new ButtonBuilder()
+    .setCustomId(`giveaway_claim_${msg.id}`)
+    .setLabel('Claim')
+    .setStyle(ButtonStyle.Success);
+  const claimRow = new ActionRowBuilder().addComponents(claimBtn);
+
+  const replyMsg = await msg.reply({ content: isReroll ? `Re-roll Winner(s): ${winnerMentions}` : `Winner(s): ${winnerMentions}`, embeds: [
     buildEmbed({ color: 'giveaway', title: `${giveaway.prize}`, description: [
       `**Winner(s):** ${winnerMentions}`,
       `**Hosted By:** <@${giveaway.hostId}>`,
       `**Participants:** ${entrants.length}`,
       isReroll ? '*This giveaway was re-rolled.*' : '',
     ].join('\n'), timestamp: Date.now() })
-  ]});
+  ], components: [claimRow] });
 
   giveaway.ended = true;
   giveaway.winnerIds = winners.map(w => w.id);
@@ -71,18 +77,13 @@ async function pickWinners(msg, giveaway, isReroll = false) {
     ].join('\n'),
   });
 
-  const claimBtn = new ButtonBuilder()
-    .setCustomId(`giveaway_claim_${msg.id}`)
-    .setLabel('Claim')
-    .setStyle(ButtonStyle.Success);
-  const claimRow = new ActionRowBuilder().addComponents(claimBtn);
-
   try {
-    await msg.edit({ embeds: [origEmbed], components: [claimRow] });
+    await msg.edit({ embeds: [origEmbed], components: [] });
   } catch (_) {}
 
   if (giveaway.claimTimeMs && giveaway.claimTimeMs > 0) {
-    scheduleClaimExpiry(msg.client, giveaway._id, giveaway.claimTimeMs);
+    giveaway.claimMessageId = replyMsg.id;
+    scheduleClaimExpiry(msg.client, giveaway._id, giveaway.claimTimeMs, replyMsg.id);
   }
 
   return winners;
@@ -111,7 +112,7 @@ function scheduleEnd(client, giveaway) {
   setTimeout(() => endGiveaway(client, giveaway), remaining);
 }
 
-function scheduleClaimExpiry(client, giveawayId, claimTimeMs) {
+function scheduleClaimExpiry(client, giveawayId, claimTimeMs, claimMsgId) {
   setTimeout(async () => {
     try {
       const Giveaway = require('../models/Giveaway');
@@ -120,7 +121,8 @@ function scheduleClaimExpiry(client, giveawayId, claimTimeMs) {
 
       const channel = await client.channels.fetch(gw.channelId).catch(() => null);
       if (!channel) return;
-      const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+      const msgId = claimMsgId || gw.claimMessageId || gw.messageId;
+      const msg = await channel.messages.fetch(msgId).catch(() => null);
       if (!msg || !msg.embeds[0]) return;
 
       const oldEmbed = EmbedBuilder.from(msg.embeds[0]);

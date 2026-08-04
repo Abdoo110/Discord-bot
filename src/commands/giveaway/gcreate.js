@@ -38,15 +38,15 @@ module.exports = {
 
     const embed = buildEmbed({
       color: 'giveaway',
-      title: `${prize}`,
+      title: `🎉 ${prize}`,
       description: [
-        '\u200b',
+        `​`,
         `**Hosted By:** ${interaction.user}`,
-        '\u200b',
-        '**Participants:** 0',
-        '\u200b',
+        `​`,
+        `**Participants:** 0`,
+        `​`,
         `**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
-        '\u200b',
+        `​`,
       ].join('\n'),
     });
 
@@ -73,7 +73,7 @@ module.exports = {
 
     const button = new ButtonBuilder()
       .setCustomId(`giveaway_enter_${msg.id}`)
-      .setEmoji(':tada:')
+      .setEmoji('🎉')
       .setStyle(ButtonStyle.Primary);
 
     const row = new ActionRowBuilder().addComponents(button);
@@ -83,7 +83,7 @@ module.exports = {
     if (cfg.channels.giveawayLogs) {
       const logChannel = interaction.guild.channels.cache.get(cfg.channels.giveawayLogs);
       if (logChannel) {
-        logChannel.send({ embeds: [buildEmbed({ color: 'giveaway', title: 'Giveaway Created', fields: [
+        logChannel.send({ embeds: [buildEmbed({ color: 'giveaway', title: '🎉 Giveaway Created', fields: [
           { name: 'Prize', value: prize, inline: true },
           { name: 'Winners', value: `${winners}`, inline: true },
           { name: 'Duration', value: durStr, inline: true },
