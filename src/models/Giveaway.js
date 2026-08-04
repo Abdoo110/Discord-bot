@@ -14,6 +14,8 @@ const giveawaySchema = new mongoose.Schema({
   ended: { type: Boolean, default: false },
   entrants: { type: [{ type: String }], default: [] },
   winnerIds: [{ type: String }],
+  claimedBy: [{ type: String }],
+  claimIGNs: { type: Map, of: String, default: {} },
   rerolled: { type: Boolean, default: false },
   createdAt: { type: Date, default: Date.now },
 });

@@ -1,11 +1,6 @@
 const { buildEmbed } = require('./embed');
+const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
 
-/**
- * Pick winners from a giveaway.
- * @param {Message} msg — the giveaway message
- * @param {Object} giveaway — Giveaway model doc
- * @param {boolean} [isReroll=false]
- */
 async function pickWinners(msg, giveaway, isReroll = false) {
   if (giveaway.ended) return [];
 
@@ -17,7 +12,7 @@ async function pickWinners(msg, giveaway, isReroll = false) {
     await giveaway.save();
     try { await msg.edit({ components: [] }); } catch (_) {}
     await msg.reply({ embeds: [
-      buildEmbed({ color: 'error', title: '❌ No Entries', description: 'No one entered the giveaway.' })
+      buildEmbed({ color: 'error', title: 'No Entries', description: 'No one entered the giveaway.' })
     ]});
     return [];
   }
@@ -35,7 +30,7 @@ async function pickWinners(msg, giveaway, isReroll = false) {
 
   if (validMembers.length === 0) {
     await msg.reply({ embeds: [
-      buildEmbed({ color: 'error', title: '❌ No Valid Entries', description: 'No valid (non-bot) entries found.' })
+      buildEmbed({ color: 'error', title: 'No Valid Entries', description: 'No valid (non-bot) entries found.' })
     ]});
     return [];
   }
@@ -46,8 +41,8 @@ async function pickWinners(msg, giveaway, isReroll = false) {
 
   const winnerMentions = winners.map(w => `<@${w.id}>`).join(', ');
 
-  await msg.reply({ content: isReroll ? `🎉 **RE-ROLL WINNER(S):** ${winnerMentions}` : `🎉 **WINNER(S):** ${winnerMentions}`, embeds: [
-    buildEmbed({ color: 'giveaway', title: `🎉 ${giveaway.prize}`, description: [
+  await msg.reply({ content: isReroll ? `Re-roll Winner(s): ${winnerMentions}` : `Winner(s): ${winnerMentions}`, embeds: [
+    buildEmbed({ color: 'giveaway', title: `${giveaway.prize}`, description: [
       `**Winner(s):** ${winnerMentions}`,
       `**Hosted By:** <@${giveaway.hostId}>`,
       `**Participants:** ${entrants.length}`,
@@ -63,28 +58,32 @@ async function pickWinners(msg, giveaway, isReroll = false) {
 
   const origEmbed = buildEmbed({
     color: 'giveaway',
-    title: `🎉 ${giveaway.prize} (ENDED)`,
+    title: `${giveaway.prize} (ENDED)`,
     description: [
-      `​`,
+      '\u200b',
       `**Winner(s):** ${winnerMentions}`,
-      `​`,
+      '\u200b',
       `**Hosted By:** <@${giveaway.hostId}>`,
-      `​`,
+      '\u200b',
       `**Participants:** ${entrants.length}`,
-      `​`,
+      '\u200b',
       isReroll ? '*Re-rolled.*' : '',
     ].join('\n'),
   });
+
+  const claimBtn = new ButtonBuilder()
+    .setCustomId(`giveaway_claim_${msg.id}`)
+    .setLabel('Claim')
+    .setStyle(ButtonStyle.Success);
+  const claimRow = new ActionRowBuilder().addComponents(claimBtn);
+
   try {
-    await msg.edit({ embeds: [origEmbed], components: [] });
+    await msg.edit({ embeds: [origEmbed], components: [claimRow] });
   } catch (_) {}
 
   return winners;
 }
 
-/**
- * End a giveaway by fetching its channel+message and calling pickWinners.
- */
 async function endGiveaway(client, giveaway) {
   const Giveaway = require('../models/Giveaway');
   const fresh = await Giveaway.findById(giveaway._id);
@@ -99,9 +98,6 @@ async function endGiveaway(client, giveaway) {
   console.log(`[END] Ended giveaway "${fresh.prize}" (guild ${fresh.guildId})`);
 }
 
-/**
- * Schedule a giveaway to end exactly at its endsAt time.
- */
 function scheduleEnd(client, giveaway) {
   const remaining = giveaway.endsAt.getTime() - Date.now();
   if (remaining <= 0) {
