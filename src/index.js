@@ -61,6 +61,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
         return interaction.reply({ content: 'Only winners can claim!', flags: MessageFlags.Ephemeral });
       }
 
+      if (giveaway.claimTimeMs && giveaway.claimTimeMs > 0) {
+        const elapsed = Date.now() - giveaway.endsAt.getTime();
+        if (elapsed > giveaway.claimTimeMs) {
+          return interaction.reply({ content: 'Claim time has expired!', flags: MessageFlags.Ephemeral });
+        }
+      }
+
       giveaway.claimedBy = giveaway.claimedBy || [];
       giveaway.claimIGNs = giveaway.claimIGNs || new Map();
       giveaway.claimedBy.push(interaction.user.id);
@@ -241,7 +248,7 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
             if (msg && msg.embeds[0]) {
               const { EmbedBuilder } = require('discord.js');
               const oldTitle = EmbedBuilder.from(msg.embeds[0]).data.title || '';
-              const newTitle = oldTitle.replace(' (ENDED)', ' (CLAIM EXPIRED)');
+              const newTitle = oldTitle.replace(' (ENDED)', '').replace(' (CLAIM EXPIRED)', '') + ' (CLAIM EXPIRED)';
               if (oldTitle !== newTitle) {
                 const emb = EmbedBuilder.from(msg.embeds[0]).setTitle(newTitle);
                 await msg.edit({ embeds: [emb], components: [] });

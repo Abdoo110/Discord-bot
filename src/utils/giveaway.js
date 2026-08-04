@@ -2,7 +2,7 @@ const { buildEmbed } = require('./embed');
 const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 
 async function pickWinners(msg, giveaway, isReroll = false) {
-  if (giveaway.ended) return [];
+  if (giveaway.ended && !isReroll) return [];
 
   const entrants = giveaway.entrants || [];
 
@@ -83,6 +83,7 @@ async function pickWinners(msg, giveaway, isReroll = false) {
 
   if (giveaway.claimTimeMs && giveaway.claimTimeMs > 0) {
     giveaway.claimMessageId = replyMsg.id;
+    await giveaway.save();
     scheduleClaimExpiry(msg.client, giveaway._id, giveaway.claimTimeMs, replyMsg.id);
   }
 
@@ -127,7 +128,7 @@ function scheduleClaimExpiry(client, giveawayId, claimTimeMs, claimMsgId) {
 
       const oldEmbed = EmbedBuilder.from(msg.embeds[0]);
       const oldTitle = oldEmbed.data.title || '';
-      const newTitle = oldTitle.replace(' (ENDED)', ' (CLAIM EXPIRED)');
+      const newTitle = oldTitle.replace(' (ENDED)', '').replace(' (CLAIM EXPIRED)', '') + ' (CLAIM EXPIRED)';
       const emb = EmbedBuilder.from(msg.embeds[0]).setTitle(newTitle);
       await msg.edit({ embeds: [emb], components: [] });
       console.log(`[CLAIM] Claim expired for giveaway ${giveawayId}`);
