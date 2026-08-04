@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, PermissionFlagsBits, ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
-const { buildEmbed, success, error } = require('../../utils/embed');
+const { buildEmbed, error } = require('../../utils/embed');
 const Giveaway = require('../../models/Giveaway');
 const { parsePrizeValue } = require('../../handlers/giveawayTracker');
 const { scheduleEnd } = require('../../utils/giveaway');
@@ -14,6 +14,7 @@ module.exports = {
     .addStringOption(o => o.setName('duration').setDescription('Duration (e.g. 10m, 1h, 1d)').setRequired(true))
     .addIntegerOption(o => o.setName('winners').setDescription('Number of winners').setMinValue(1).setMaxValue(20))
     .addStringOption(o => o.setName('requirements').setDescription('Any special requirements'))
+    .addStringOption(o => o.setName('claimtime').setDescription('Time winners have to claim (e.g. 5m, 1h). No limit if empty.'))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageEvents)
     .setDMPermission(false),
 
@@ -21,25 +22,31 @@ module.exports = {
     const prize = interaction.options.getString('prize');
     const durStr = interaction.options.getString('duration');
     const winners = interaction.options.getInteger('winners') || 1;
-    const requirements = interaction.options.getString('requirements');
+    const claimTimeStr = interaction.options.getString('claimtime');
+
+    let claimTimeMs = 0;
+    if (claimTimeStr) {
+      claimTimeMs = ms(claimTimeStr);
+      if (!claimTimeMs || claimTimeMs < 0) return error(interaction, 'Error', 'Invalid claim time. Use formats like: 5m, 1h, 30m.');
+    }
 
     const durationMs = ms(durStr);
-    if (!durationMs || durationMs < 10000) return error(interaction, '❌ Error', 'Invalid duration. Minimum 10 seconds. Use formats like: 10m, 1h, 1d.');
-    if (durationMs > 2592000000) return error(interaction, '❌ Error', 'Duration cannot exceed 30 days.');
+    if (!durationMs || durationMs < 10000) return error(interaction, 'Error', 'Invalid duration. Minimum 10 seconds. Use formats like: 10m, 1h, 1d.');
+    if (durationMs > 2592000000) return error(interaction, 'Error', 'Duration cannot exceed 30 days.');
 
     const endsAt = new Date(Date.now() + durationMs);
 
     const embed = buildEmbed({
       color: 'giveaway',
-      title: `🎉 ${prize}`,
+      title: `${prize}`,
       description: [
-        `​`,
+        '\u200b',
         `**Hosted By:** ${interaction.user}`,
-        `​`,
-        `**Participants:** 0`,
-        `​`,
+        '\u200b',
+        '**Participants:** 0',
+        '\u200b',
         `**Ends:** <t:${Math.floor(endsAt.getTime() / 1000)}:R>`,
-        `​`,
+        '\u200b',
       ].join('\n'),
     });
 
@@ -57,6 +64,7 @@ module.exports = {
       winners,
       durationMs,
       endsAt,
+      claimTimeMs,
       entrants: [],
     });
 
@@ -65,7 +73,7 @@ module.exports = {
 
     const button = new ButtonBuilder()
       .setCustomId(`giveaway_enter_${msg.id}`)
-      .setEmoji('🎉')
+      .setEmoji(':tada:')
       .setStyle(ButtonStyle.Primary);
 
     const row = new ActionRowBuilder().addComponents(button);
@@ -75,7 +83,7 @@ module.exports = {
     if (cfg.channels.giveawayLogs) {
       const logChannel = interaction.guild.channels.cache.get(cfg.channels.giveawayLogs);
       if (logChannel) {
-        logChannel.send({ embeds: [buildEmbed({ color: 'giveaway', title: '🎉 Giveaway Created', fields: [
+        logChannel.send({ embeds: [buildEmbed({ color: 'giveaway', title: 'Giveaway Created', fields: [
           { name: 'Prize', value: prize, inline: true },
           { name: 'Winners', value: `${winners}`, inline: true },
           { name: 'Duration', value: durStr, inline: true },

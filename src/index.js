@@ -89,6 +89,13 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({ content: 'You already claimed this prize!', flags: MessageFlags.Ephemeral });
         }
 
+        if (giveaway.claimTimeMs && giveaway.claimTimeMs > 0) {
+          const elapsed = Date.now() - giveaway.endsAt.getTime();
+          if (elapsed > giveaway.claimTimeMs) {
+            return interaction.reply({ content: 'Claim time has expired!', flags: MessageFlags.Ephemeral });
+          }
+        }
+
         const { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder: ARB } = require('discord.js');
         const modal = new ModalBuilder()
           .setCustomId(`giveaway_claim_modal_${messageId}`)
@@ -127,7 +134,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
           if (!giveaway || giveaway.ended) {
             return interaction.reply({ content: 'This giveaway has ended or no longer exists.', flags: MessageFlags.Ephemeral });
           }
-          return interaction.reply({ content: 'You\'ve already entered this giveaway!', flags: MessageFlags.Ephemeral });
+          return interaction.reply({ content: "You've already entered this giveaway!", flags: MessageFlags.Ephemeral });
         }
 
         try {
@@ -192,10 +199,36 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
     console.log(chalk.green('Bot is online!'));
 
     const Giveaway = require('./models/Giveaway');
-    const { scheduleEnd } = require('./utils/giveaway');
+    const { scheduleEnd, scheduleClaimExpiry } = require('./utils/giveaway');
+
     const active = await Giveaway.find({ ended: false });
     for (const gw of active) scheduleEnd(client, gw);
     console.log(chalk.cyan(`Scheduled ${active.length} active giveaway(s)`));
+
+    const endedWithClaim = await Giveaway.find({ ended: true, claimTimeMs: { $gt: 0 } });
+    for (const gw of endedWithClaim) {
+      const elapsed = Date.now() - gw.endsAt.getTime();
+      const remaining = gw.claimTimeMs - elapsed;
+      if (remaining > 0) {
+        scheduleClaimExpiry(client, gw._id, remaining);
+      } else {
+        try {
+          const channel = await client.channels.fetch(gw.channelId).catch(() => null);
+          if (channel) {
+            const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+            if (msg && msg.embeds[0]) {
+              const { EmbedBuilder } = require('discord.js');
+              const oldTitle = EmbedBuilder.from(msg.embeds[0]).data.title || '';
+              const newTitle = oldTitle.replace(' (ENDED)', ' (CLAIM EXPIRED)');
+              if (oldTitle !== newTitle) {
+                const emb = EmbedBuilder.from(msg.embeds[0]).setTitle(newTitle);
+                await msg.edit({ embeds: [emb], components: [] });
+              }
+            }
+          }
+        } catch (_) {}
+      }
+    }
 
     setInterval(async () => {
       try {
@@ -208,7 +241,6 @@ client.on(Events.GuildBanAdd, banAddHandler.execute);
             const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
             if (!msg) continue;
             await pickWinners(msg, gw);
-            console.log(`[SAFETY] Ended giveaway "${gw.prize}" in ${gw.guildId}`);
           } catch (err) {
             console.error('[SAFETY] Error:', err.message);
           }

@@ -12,6 +12,7 @@ const giveawaySchema = new mongoose.Schema({
   durationMs: { type: Number, required: true },
   endsAt: { type: Date, required: true },
   ended: { type: Boolean, default: false },
+  claimTimeMs: { type: Number, default: 0 },
   entrants: { type: [{ type: String }], default: [] },
   winnerIds: [{ type: String }],
   claimedBy: [{ type: String }],

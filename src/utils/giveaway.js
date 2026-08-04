@@ -1,5 +1,5 @@
 const { buildEmbed } = require('./embed');
-const { ButtonBuilder, ButtonStyle, ActionRowBuilder } = require('discord.js');
+const { ButtonBuilder, ButtonStyle, ActionRowBuilder, EmbedBuilder } = require('discord.js');
 
 async function pickWinners(msg, giveaway, isReroll = false) {
   if (giveaway.ended) return [];
@@ -81,6 +81,10 @@ async function pickWinners(msg, giveaway, isReroll = false) {
     await msg.edit({ embeds: [origEmbed], components: [claimRow] });
   } catch (_) {}
 
+  if (giveaway.claimTimeMs && giveaway.claimTimeMs > 0) {
+    scheduleClaimExpiry(msg.client, giveaway._id, giveaway.claimTimeMs);
+  }
+
   return winners;
 }
 
@@ -107,4 +111,28 @@ function scheduleEnd(client, giveaway) {
   setTimeout(() => endGiveaway(client, giveaway), remaining);
 }
 
-module.exports = { pickWinners, endGiveaway, scheduleEnd };
+function scheduleClaimExpiry(client, giveawayId, claimTimeMs) {
+  setTimeout(async () => {
+    try {
+      const Giveaway = require('../models/Giveaway');
+      const gw = await Giveaway.findById(giveawayId);
+      if (!gw) return;
+
+      const channel = await client.channels.fetch(gw.channelId).catch(() => null);
+      if (!channel) return;
+      const msg = await channel.messages.fetch(gw.messageId).catch(() => null);
+      if (!msg || !msg.embeds[0]) return;
+
+      const oldEmbed = EmbedBuilder.from(msg.embeds[0]);
+      const oldTitle = oldEmbed.data.title || '';
+      const newTitle = oldTitle.replace(' (ENDED)', ' (CLAIM EXPIRED)');
+      const emb = EmbedBuilder.from(msg.embeds[0]).setTitle(newTitle);
+      await msg.edit({ embeds: [emb], components: [] });
+      console.log(`[CLAIM] Claim expired for giveaway ${giveawayId}`);
+    } catch (err) {
+      console.error('[CLAIM-EXPIRY]', err.message);
+    }
+  }, claimTimeMs);
+}
+
+module.exports = { pickWinners, endGiveaway, scheduleEnd, scheduleClaimExpiry };
