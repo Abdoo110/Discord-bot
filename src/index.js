@@ -67,6 +67,27 @@ client.on(Events.InteractionCreate, async (interaction) => {
       giveaway.claimIGNs.set(interaction.user.id, ign);
       await giveaway.save();
 
+      try {
+        const GuildConfig = require('./models/GuildConfig');
+        const cfg = await GuildConfig.findOne({ guildId: interaction.guild.id });
+        if (cfg?.channels?.claimIGNsChannel) {
+          const logChannel = interaction.guild.channels.cache.get(cfg.channels.claimIGNsChannel);
+          if (logChannel) {
+            const { EmbedBuilder } = require('discord.js');
+            await logChannel.send({ embeds: [new EmbedBuilder()
+              .setTitle('Prize Claimed')
+              .addFields(
+                { name: 'Prize', value: giveaway.prize, inline: true },
+                { name: 'Winner', value: `<@${interaction.user.id}>`, inline: true },
+                { name: 'IGN', value: ign, inline: true }
+              )
+              .setColor('#57F287')
+              .setTimestamp()
+            ]});
+          }
+        }
+      } catch (_) {}
+
       await interaction.reply({ content: 'You will be paid soon!', flags: MessageFlags.Ephemeral });
     } catch (err) {
       console.error('[CLAIM-MODAL]', err.message);
