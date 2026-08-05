@@ -17,6 +17,7 @@ module.exports = {
         { name: 'Bug Reports', value: 'bugReports' },
         { name: 'Partner Channel', value: 'partnerChannel' },
         { name: 'Orders Channel', value: 'ordersChannel' },
+        { name: 'Order Paid Channel', value: 'orderPaidChannel' },
         { name: 'Claim IGNs Channel', value: 'claimIGNsChannel' },
         { name: 'Giveaway Proof Channel', value: 'giveawayProofChannel' },
       ))
@@ -40,6 +41,7 @@ module.exports = {
       bugReports: 'Bug Reports',
       partnerChannel: 'Partner Channel',
       ordersChannel: 'Orders Channel',
+      orderPaidChannel: 'Order Paid Channel',
       claimIGNsChannel: 'Claim IGNs Channel',
       giveawayProofChannel: 'Giveaway Proof Channel',
     };

@@ -10,6 +10,7 @@ const orderSchema = new mongoose.Schema({
   totalPrice: { type: Number, required: true },
   formattedPrice: { type: String, required: true },
   status: { type: String, default: 'pending' },
+  paid: { type: Boolean, default: false },
   orderChannelId: { type: String, default: null },
   orderMessageId: { type: String, default: null },
   createdAt: { type: Date, default: Date.now },
