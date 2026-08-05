@@ -80,7 +80,12 @@ client.on(Events.InteractionCreate, async (interaction) => {
         if (cfg?.channels?.claimIGNsChannel) {
           const logChannel = interaction.guild.channels.cache.get(cfg.channels.claimIGNsChannel);
           if (logChannel) {
-            const { EmbedBuilder } = require('discord.js');
+            const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder: ARB2 } = require('discord.js');
+            const paidBtn = new ButtonBuilder()
+              .setCustomId(`giveaway_paid_${messageId}_${interaction.user.id}`)
+              .setLabel('Paid')
+              .setStyle(ButtonStyle.Primary);
+            const paidRow = new ARB2().addComponents(paidBtn);
             await logChannel.send({ embeds: [new EmbedBuilder()
               .setTitle('Prize Claimed')
               .addFields(
@@ -90,7 +95,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
               )
               .setColor('#57F287')
               .setTimestamp()
-            ]});
+            ], components: [paidRow] });
           }
         }
       } catch (_) {}
@@ -104,6 +109,56 @@ client.on(Events.InteractionCreate, async (interaction) => {
   }
 
   if (interaction.isButton()) {
+    if (interaction.customId.startsWith('giveaway_paid_')) {
+      try {
+        const parts = interaction.customId.replace('giveaway_paid_', '').split('_');
+        const messageId = parts[0];
+        const winnerId = parts.slice(1).join('_');
+
+        const Giveaway = require('./models/Giveaway');
+        const giveaway = await Giveaway.findOne({ guildId: interaction.guild.id, messageId });
+
+        if (!giveaway || interaction.user.id !== giveaway.hostId) {
+          return interaction.reply({ content: 'Only the giveaway host can mark as paid!', flags: MessageFlags.Ephemeral });
+        }
+
+        try {
+          const member = await interaction.guild.members.fetch(winnerId).catch(() => null);
+          if (member) {
+            const GuildConfig = require('./models/GuildConfig');
+            const cfg = await GuildConfig.findOne({ guildId: interaction.guild.id });
+            const proofMention = cfg?.channels?.giveawayProofChannel
+              ? `Proof will be posted in <#${cfg.channels.giveawayProofChannel}> soon!`
+              : '';
+            const { EmbedBuilder } = require('discord.js');
+            await member.send({ embeds: [new EmbedBuilder()
+              .setTitle('Prize Paid!')
+              .setDescription([
+                `Your prize for **${giveaway.prize}** has been paid!`,
+                `Please vouch for us by using \`/vouch\` in the server.`,
+                proofMention,
+              ].filter(Boolean).join('\n\n'))
+              .setColor('#57F287')
+              .setTimestamp()
+            ]});
+          }
+        } catch (_) {}
+
+        if (interaction.message.embeds[0]) {
+          const { EmbedBuilder } = require('discord.js');
+          const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
+          oldEmbed.setTitle('Prize Claimed (PAID)').setColor('#FEE75C');
+          await interaction.message.edit({ embeds: [oldEmbed], components: [] });
+        }
+
+        await interaction.reply({ content: 'Marked as paid!', flags: MessageFlags.Ephemeral });
+      } catch (err) {
+        console.error('[PAID]', err.message);
+        if (!interaction.replied) await interaction.reply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral }).catch(() => {});
+      }
+      return;
+    }
+
     if (interaction.customId.startsWith('giveaway_claim_')) {
       try {
         const messageId = interaction.customId.replace('giveaway_claim_', '');

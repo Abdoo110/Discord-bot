@@ -13,6 +13,7 @@ const guildConfigSchema = new mongoose.Schema({
     partnerChannel: { type: String, default: null },
     ordersChannel: { type: String, default: null },
     claimIGNsChannel: { type: String, default: null },
+    giveawayProofChannel: { type: String, default: null },
     bugReports: { type: String, default: null },
     activityChannel: { type: String, default: null },
     stickyChannel: { type: String, default: null },

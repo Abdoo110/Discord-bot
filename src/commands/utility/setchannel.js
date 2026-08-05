@@ -18,6 +18,7 @@ module.exports = {
         { name: 'Partner Channel', value: 'partnerChannel' },
         { name: 'Orders Channel', value: 'ordersChannel' },
         { name: 'Claim IGNs Channel', value: 'claimIGNsChannel' },
+        { name: 'Giveaway Proof Channel', value: 'giveawayProofChannel' },
       ))
     .addChannelOption(o => o.setName('channel').setDescription('The channel').addChannelTypes(ChannelType.GuildText).setRequired(true))
     .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
@@ -40,6 +41,7 @@ module.exports = {
       partnerChannel: 'Partner Channel',
       ordersChannel: 'Orders Channel',
       claimIGNsChannel: 'Claim IGNs Channel',
+      giveawayProofChannel: 'Giveaway Proof Channel',
     };
 
     await success(interaction, 'Channel Configured', `**${labels[type]}** has been set to ${channel}.`);
