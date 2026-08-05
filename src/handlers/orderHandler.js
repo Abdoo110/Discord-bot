@@ -105,14 +105,14 @@ async function processOrder(interaction) {
     const dm = await interaction.user.createDM();
     await dm.send({
       embeds: [new EmbedBuilder()
-        .setTitle('Order Placed')
+        .setTitle('📦 Order Placed')
         .setDescription([
           `**Shulker Type:** ${shulkerType}`,
           `**Quantity:** ${quantity}`,
           `**Total Price:** ${formatted}`,
           `**When:** ${whenNeeded}`,
           '',
-          `Pay half (${halfFormatted}) to \`hkgame4576\``,
+          `💳 **Pay half (${halfFormatted}) to \`hkgame4576\`**`,
           `After paying, click the button below.`,
         ].join('\n'))
         .setColor('#5865F2').setTimestamp()
@@ -357,6 +357,9 @@ async function handlePaid(interaction) {
   order.paid = true;
   await order.save();
 
+  const halfPrice = order.totalPrice / 2;
+  const halfFormatted = formatPrice(halfPrice);
+
   const guild = await interaction.client.guilds.fetch(order.guildId).catch(() => null);
   if (guild) {
     const cfg = await GuildConfig.findOne({ guildId: order.guildId });
@@ -365,16 +368,19 @@ async function handlePaid(interaction) {
       if (channel) {
         await channel.send({
           embeds: [new EmbedBuilder()
-            .setTitle('Payment Claimed')
-            .setDescription(`<@${order.userId}> says they paid half for their order.`)
+            .setTitle('💰 Payment Received!')
+            .setDescription(`<@${order.userId}> has paid you **${halfFormatted}**`)
             .addFields(
-              { name: 'Order ID', value: order._id.toString(), inline: true },
-              { name: 'Shulker Type', value: order.shulkerType, inline: true },
-              { name: 'Quantity', value: `${order.quantity}`, inline: true },
-              { name: 'Half Price', value: formatPrice(order.totalPrice / 2), inline: true },
-              { name: 'Full Price', value: order.formattedPrice, inline: true },
+              { name: '👤 Customer', value: `<@${order.userId}>`, inline: true },
+              { name: '💎 Shulker Type', value: `Type ${order.shulkerType}`, inline: true },
+              { name: '📦 Quantity', value: `${order.quantity}`, inline: true },
+              { name: '💵 Half Payment', value: halfFormatted, inline: true },
+              { name: '💰 Full Price', value: order.formattedPrice, inline: true },
+              { name: '⏰ When Needed', value: order.whenNeeded || 'Not specified', inline: true },
+              { name: '🔑 Order ID', value: order._id.toString(), inline: false },
             )
-            .setColor('#5865F2')
+            .setColor('#57F287')
+            .setFooter({ text: `Paid to hkgame4576 • Verify before processing` })
             .setTimestamp()
           ],
         });
@@ -384,12 +390,12 @@ async function handlePaid(interaction) {
 
   if (interaction.message.embeds[0]) {
     const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-    const desc = (oldEmbed.data.description || '') + '\n\nPayment marked! Staff will verify.\n';
+    const desc = (oldEmbed.data.description || '') + `\n\n✅ **Payment of ${halfFormatted} marked!** Staff will verify.`;
     oldEmbed.setDescription(desc).setColor('#57F287');
     await interaction.message.edit({ embeds: [oldEmbed], components: [] });
   }
 
-  await interaction.reply({ content: 'Payment claim sent! Staff will verify and process your order.', flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: `✅ Payment of **${halfFormatted}** claimed! Staff will verify and process your order.`, flags: MessageFlags.Ephemeral });
 }
 
 module.exports = { handleOrderInteraction };
