@@ -50,6 +50,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     if (handled) return;
   }
 
+  // === GIVEAWAY CLAIM MODAL SUBMIT ===
   if (interaction.isModalSubmit() && interaction.customId.startsWith('giveaway_claim_modal_')) {
     try {
       const messageId = interaction.customId.replace('giveaway_claim_modal_', '');
@@ -74,6 +75,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       giveaway.claimIGNs.set(interaction.user.id, ign);
       await giveaway.save();
 
+      // Send to claim IGNs channel with "Paid" button + prize amount
       try {
         const GuildConfig = require('./models/GuildConfig');
         const cfg = await GuildConfig.findOne({ guildId: interaction.guild.id });
@@ -81,19 +83,25 @@ client.on(Events.InteractionCreate, async (interaction) => {
           const logChannel = interaction.guild.channels.cache.get(cfg.channels.claimIGNsChannel);
           if (logChannel) {
             const { EmbedBuilder, ButtonBuilder, ButtonStyle, ActionRowBuilder: ARB2 } = require('discord.js');
+            const prizeValueText = giveaway.prizeValue && giveaway.prizeValue > 0
+              ? giveaway.prizeValue.toLocaleString()
+              : 'Not set';
             const paidBtn = new ButtonBuilder()
               .setCustomId(`giveaway_paid_${messageId}_${interaction.user.id}`)
-              .setLabel('Paid')
-              .setStyle(ButtonStyle.Primary);
+              .setLabel('💰 Mark as Paid')
+              .setStyle(ButtonStyle.Success);
             const paidRow = new ARB2().addComponents(paidBtn);
             await logChannel.send({ embeds: [new EmbedBuilder()
-              .setTitle('Prize Claimed')
+              .setTitle('🏆 Prize Claimed')
               .addFields(
-                { name: 'Prize', value: giveaway.prize, inline: true },
-                { name: 'Winner', value: `<@${interaction.user.id}>`, inline: true },
-                { name: 'IGN', value: ign, inline: true }
+                { name: '🎁 Prize', value: giveaway.prize, inline: true },
+                { name: '💵 Amount to Pay', value: prizeValueText, inline: true },
+                { name: '👤 Winner', value: `<@${interaction.user.id}>`, inline: true },
+                { name: '🎮 IGN', value: ign, inline: true },
+                { name: '⏰ Claimed', value: `<t:${Math.floor(Date.now() / 1000)}:R>`, inline: true }
               )
               .setColor('#57F287')
+              .setFooter({ text: 'Click Paid after sending the prize' })
               .setTimestamp()
             ], components: [paidRow] });
           }
@@ -108,7 +116,9 @@ client.on(Events.InteractionCreate, async (interaction) => {
     return;
   }
 
+  // === GIVEAWAY BUTTONS ===
   if (interaction.isButton()) {
+    // --- Paid button ---
     if (interaction.customId.startsWith('giveaway_paid_')) {
       try {
         const parts = interaction.customId.replace('giveaway_paid_', '').split('_');
@@ -122,36 +132,46 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({ content: 'Only the giveaway host can mark as paid!', flags: MessageFlags.Ephemeral });
         }
 
+        // DM the winner
         try {
           const member = await interaction.guild.members.fetch(winnerId).catch(() => null);
           if (member) {
             const GuildConfig = require('./models/GuildConfig');
             const cfg = await GuildConfig.findOne({ guildId: interaction.guild.id });
-            const proofMention = cfg?.channels?.giveawayProofChannel
-              ? `Proof will be posted in <#${cfg.channels.giveawayProofChannel}> soon!`
+            const voucherLine = cfg?.channels?.vouchLogs
+              ? `📜 **Vouch for us:** Use \`/vouch\` in <#${cfg.channels.vouchLogs}>`
+              : '📜 **Vouch for us:** Use `/vouch` in the server';
+            const proofLine = cfg?.channels?.giveawayProofChannel
+              ? `📸 **Check giveaway proof in:** <#${cfg.channels.giveawayProofChannel}>`
+              : '📸 Check giveaway proof in the server';
+            const amountLine = giveaway.prizeValue && giveaway.prizeValue > 0
+              ? `💰 **Amount Paid:** ${giveaway.prizeValue.toLocaleString()}`
               : '';
             const { EmbedBuilder } = require('discord.js');
             await member.send({ embeds: [new EmbedBuilder()
-              .setTitle('Prize Paid!')
+              .setTitle('✅ You Have Been Paid!')
               .setDescription([
-                `Your prize for **${giveaway.prize}** has been paid!`,
-                `Please vouch for us by using \`/vouch\` in the server.`,
-                proofMention,
-              ].filter(Boolean).join('\n\n'))
+                `You have been paid for **${giveaway.prize}**!`,
+                amountLine,
+                '',
+                proofLine,
+                voucherLine,
+              ].filter(Boolean).join('\n'))
               .setColor('#57F287')
               .setTimestamp()
             ]});
           }
         } catch (_) {}
 
+        // Update the claim embed
         if (interaction.message.embeds[0]) {
           const { EmbedBuilder } = require('discord.js');
           const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-          oldEmbed.setTitle('Prize Claimed (PAID)').setColor('#FEE75C');
+          oldEmbed.setTitle('🏆 Prize Claimed (PAID)').setColor('#FEE75C').setFooter({ text: `Paid by ${interaction.user.tag}` });
           await interaction.message.edit({ embeds: [oldEmbed], components: [] });
         }
 
-        await interaction.reply({ content: 'Marked as paid!', flags: MessageFlags.Ephemeral });
+        await interaction.reply({ content: '✅ Marked as paid! Winner has been DMed.', flags: MessageFlags.Ephemeral });
       } catch (err) {
         console.error('[PAID]', err.message);
         if (!interaction.replied) await interaction.reply({ content: 'Something went wrong.', flags: MessageFlags.Ephemeral }).catch(() => {});
@@ -159,6 +179,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // --- Claim button ---
     if (interaction.customId.startsWith('giveaway_claim_')) {
       try {
         const messageId = interaction.customId.replace('giveaway_claim_', '');
@@ -201,6 +222,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
+    // --- Enter button ---
     if (interaction.customId.startsWith('giveaway_enter_')) {
       try {
         const messageId = interaction.customId.replace('giveaway_enter_', '');
