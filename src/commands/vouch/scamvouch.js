@@ -18,15 +18,6 @@ module.exports = {
     if (target.id === interaction.user.id) return error(interaction, '❌ Error', 'You cannot scam-vouch yourself.');
     if (target.bot) return error(interaction, '❌ Error', 'You cannot scam-vouch bots.');
 
-    const existing = await Vouch.findOne({
-      guildId: interaction.guild.id,
-      targetId: target.id,
-      authorId: interaction.user.id,
-      type: 'scam',
-    });
-
-    if (existing) return error(interaction, '❌ Already Reported', `You have already submitted a scam vouch for ${target.tag}.`);
-
     await Vouch.create({
       guildId: interaction.guild.id,
       targetId: target.id,

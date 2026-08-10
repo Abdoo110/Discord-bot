@@ -18,15 +18,6 @@ module.exports = {
     if (target.id === interaction.user.id) return error(interaction, '❌ Error', 'You cannot vouch for yourself.');
     if (target.bot) return error(interaction, '❌ Error', 'You cannot vouch for bots.');
 
-    const existing = await Vouch.findOne({
-      guildId: interaction.guild.id,
-      targetId: target.id,
-      authorId: interaction.user.id,
-      type: 'vouch',
-    });
-
-    if (existing) return error(interaction, '❌ Already Vouched', `You have already vouched for ${target.tag}.`);
-
     await Vouch.create({
       guildId: interaction.guild.id,
       targetId: target.id,
