@@ -78,6 +78,8 @@ function extractHostFromEmbed(embed) {
 
 async function handleMessage(message) {
   if (!message.guild || !message.author.bot) return;
+  // Only track giveaways posted by THIS bot; never act on another bot's giveaways.
+  if (message.author.id !== message.client.user.id) return;
 
   if (message.embeds?.length) {
     const e = message.embeds[0];
