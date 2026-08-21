@@ -33,8 +33,17 @@ module.exports = {
 
     const totalWarnings = await Warning.countDocuments({ guildId: interaction.guild.id, userId: target.id });
 
-    await success(interaction, '⚡ Strike Issued',
-      `**User:** <@${target.id}> (${target.id})\n**Case:** #${caseNum}\n**Reason:** ${reason}\n**Total Strikes:** ${totalWarnings}\n**Moderator:** ${interaction.user.tag}`);
+    await interaction.reply({
+      content: `<@${target.id}>`,
+      embeds: [
+        require('../../utils/embed').buildEmbed({
+          color: 'success',
+          title: '⚡ Strike Issued',
+          description: `**User:** ${target.tag} (${target.id})\n**Case:** #${caseNum}\n**Reason:** ${reason}\n**Total Strikes:** ${totalWarnings}\n**Moderator:** ${interaction.user.tag}`,
+          timestamp: Date.now(),
+        }),
+      ],
+    });
 
     try {
       await target.send({ embeds: [
