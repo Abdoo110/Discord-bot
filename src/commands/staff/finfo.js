@@ -25,7 +25,7 @@ module.exports = {
         { name: 'Timezone', value: staff.timezone || 'Not set', inline: true },
         { name: 'Position', value: staff.position, inline: true },
         { name: 'Hired', value: `<t:${Math.floor(staff.hiredAt.getTime() / 1000)}:D>`, inline: true },
-        { name: 'LOA', value: staff.loa.active ? `🔴 On LOA until <t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>` : '🔴 Active', inline: false },
+        { name: 'LOA', value: staff.loa.active ? `🔴 On LOA until <t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>` : '🟢 Active', inline: false },
       ], thumbnail: target.displayAvatarURL({ dynamic: true }) })
     ]});
   },

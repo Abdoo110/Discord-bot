@@ -18,9 +18,7 @@ module.exports = {
     if (!channel) return error(interaction, '❌ Error', 'Channel not found.');
     let msg;
     try { msg = await channel.messages.fetch(messageId); } catch (_) { return error(interaction, '❌ Error', 'Giveaway message not found.'); }
-    giveaway.rerolled = true;
     await pickWinners(msg, giveaway, true);
-    await giveaway.save();
     await interaction.reply({ embeds: [buildEmbed({ color: 'success', title: '🎉 Giveaway Re-rolled', description: `New winner(s) have been selected for **${giveaway.prize}**.` })] });
   },
 };
