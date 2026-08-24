@@ -34,17 +34,19 @@ module.exports = {
   },
   antiRaid: {
     enabled: true,
-    maxJoins: 10,              // max users joining in window
+    maxJoins: 10,              // joins in window that trigger a staff alert
     windowMs: 10000,           // 10 second window
-    action: 'lockdown',        // 'lockdown' or 'kick'
-    unlockAfterMs: 300000,     // auto-unlock after 5 minutes
+    minAccountAgeMs: 86400000, // 24h — accounts newer than this are 'suspicious'
+    // NOTE: Anti-raid NEVER locks channels and NEVER kicks human members.
+    // It only kicks obvious bot accounts and sends an alert to staff.
   },
   antiNuke: {
     enabled: true,
-    maxChannelDeletes: 3,      // per 10s window
+    maxChannelDeletes: 3,      // per 10s window (triggers a staff alert)
     maxRoleDeletes: 3,
     maxBanKicks: 5,
     windowMs: 10000,
-    unlockAfterMs: 300000,     // auto-unlock after 5 minutes
+    // NOTE: Anti-nuke NEVER locks the server and NEVER touches human members.
+    // It only alerts staff, and times out the actor only if the actor is a bot.
   },
 };
