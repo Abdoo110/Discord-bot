@@ -3,9 +3,9 @@ const config = require('../config');
 const { buildEmbed } = require('../utils/embed');
 
 // ─── In-memory rate limit caches ────────────────────────────────
-// spamCache:   Map<guildId, Map<userId, { count, firstMsgTime }>>
-// raidCache:   Map<guildId, { count, windowStart, memberIds:Set, locked }>
-// nukeCache:   Map<guildId, { channelDeletes, roleDeletes, banKicks, windowStart, locked }>
+// spamCache:  Map<guildId, Map<userId, { count, firstMsgTime }>>
+// raidCache:  Map<guildId, { count, windowStart, alerted, bots:Set }>
+// nukeCache:  Map<guildId, { channelDeletes, roleDeletes, banKicks, windowStart, alerted }>
 const spamCache = new Map();
 const raidCache = new Map();
 const nukeCache = new Map();
@@ -36,7 +36,6 @@ const BLOCKED_SCRIPT_RANGES = [
   /[\u0980-\u09FF]/u,   // Bengali
   /[\u05D0-\u05EA]/u,   // Hebrew
   /[\u1E00-\u1EFF]/u,   // Latin Extended Additional (Vietnamese)
-  /[\u2000-\u206F]/u,   // General punctuation (zero-width etc.)
 ];
 
 // Detect if a string contains characters from a blocked/non-Latin script.
@@ -73,16 +72,21 @@ function getGuildMap(cache, guildId) {
   return cache.get(guildId);
 }
 
-async function logModAction(guild, title, description, color = 'error') {
+// Post an alert to staff (modLogs channel). This is alert-only — we never
+// lock the server or silence members automatically.
+async function alertStaff(guild, title, description, color = 'warn') {
   try {
     const cfg = await GuildConfig.findOne({ guildId: guild.id });
-    if (!cfg?.channels?.modLogs) return;
-    const logChannel = guild.channels.cache.get(cfg.channels.modLogs);
+    if (!cfg) return;
+    const chId = cfg.channels?.modLogs || cfg.channels?.staffLogs;
+    if (!chId) return;
+    const logChannel = guild.channels.cache.get(chId);
     if (!logChannel) return;
     await logChannel.send({ embeds: [buildEmbed({ color, title, description, timestamp: Date.now() })] }).catch(() => {});
   } catch (_) {}
 }
 
+// Manual lockdown (ONLY used when staff explicitly run /antiraid lockdown).
 async function lockdown(guild) {
   for (const [, channel] of guild.channels.cache) {
     if (channel.isTextBased()) {
@@ -99,12 +103,20 @@ async function unlock(guild) {
   }
 }
 
+function isSuspicious(entry, minAccountAgeMs = 86400000) {
+  // A "suspicious" account = brand new, or obviously a bot. These are the only
+  // ones we take automatic action against. Humans are never removed.
+  const created = entry?.user?.createdTimestamp || 0;
+  const isNew = created && (Date.now() - created < minAccountAgeMs);
+  const isBot = entry?.user?.bot === true;
+  return isBot || isNew;
+}
+
 // ─── Anti-Spam ─────────────────────────────────────────────────
 async function checkSpam(message) {
   if (!message.guild || message.author.bot) return false;
   const cfg = await GuildConfig.findOne({ guildId: message.guild.id });
   if (!cfg || !cfg.antiSpamEnabled) return false;
-  if (cfg.roles.mutedRole && message.member?.roles.cache.has(cfg.roles.mutedRole)) return false;
 
   const { maxMessages = 5, windowMs = 3000, timeoutDurationMs = 600000 } = config.antiSpam;
   const gmap = getGuildMap(spamCache, message.guild.id);
@@ -153,7 +165,7 @@ async function punishForSpam(message, durationMs) {
       for (const m of userMsgs.values()) await m.delete().catch(() => {});
     });
   } catch (_) {}
-  await logModAction(message.guild, '🚫 Anti-Spam', `**${message.author.tag}** (\`${message.author.id}\`) timed out for **10 minutes** for message flooding.`, 'error');
+  await alertStaff(message.guild, '🚫 Anti-Spam', `**${message.author.tag}** (\`${message.author.id}\`) timed out for **10 minutes** for message flooding.`, 'error');
 }
 
 async function punishForLanguage(message, label) {
@@ -162,87 +174,75 @@ async function punishForLanguage(message, label) {
   try {
     if (member && member.moderatable) await member.timeout(600000, 'Anti-spam: blocked language / non-Latin characters');
   } catch (_) {}
-  await logModAction(message.guild, '🌐 Language Blocked', `**${message.author.tag}** (\`${message.author.id}\`) was timed out for **10 minutes** for sending blocked (non-English) content.\nDetected: ${label}`, 'warn');
+  await alertStaff(message.guild, '🌐 Language Blocked', `**${message.author.tag}** (\`${message.author.id}\`) was timed out for **10 minutes** for sending blocked (non-English) content.\nDetected: ${label}`, 'warn');
 }
 
 // ─── Anti-Raid ─────────────────────────────────────────────────
+// IMPORTANT: This NEVER locks channels and NEVER removes human members.
+// It only (a) kicks/ignores obvious bot accounts and (b) alerts staff when a
+// suspicious join burst is detected. Members can keep joining and talking.
 async function checkRaid(member) {
   const cfg = await GuildConfig.findOne({ guildId: member.guild.id });
   if (!cfg || !cfg.antiRaidEnabled) return;
 
-  const { maxJoins = 10, windowMs = 10000, action = 'lockdown', unlockAfterMs = 300000 } = config.antiRaid;
+  const { maxJoins = 10, windowMs = 10000, minAccountAgeMs = 86400000 } = config.antiRaid;
   const now = Date.now();
   let data = raidCache.get(member.guild.id);
 
   if (!data) {
-    raidCache.set(member.guild.id, { count: 1, windowStart: now, memberIds: new Set([member.id]), locked: false });
+    raidCache.set(member.guild.id, { count: 1, windowStart: now, alerted: false, bots: new Set() });
     return;
   }
 
+  // Reset window if expired.
   if (now - data.windowStart > windowMs) {
     data.count = 1;
     data.windowStart = now;
-    data.memberIds = new Set([member.id]);
-    data.locked = false;
+    data.alerted = false;
+    data.bots = new Set();
     return;
   }
 
   data.count++;
-  data.memberIds.add(member.id);
 
-  if (data.count >= maxJoins && !data.locked) {
-    data.locked = true;
-    console.log(`[ANTI-RAID] Raid detected in ${member.guild.name}! Action: ${action}`);
+  // Only act against obvious bot accounts. Humans are NEVER touched here.
+  if (member.user?.bot) {
+    data.bots.add(member.id);
+    const m = member.guild.members.cache.get(member.id) || member;
+    if (m.kickable) await m.kick('Anti-raid: bot account detected').catch(() => {});
+  }
 
-    if (action === 'kick') {
-      for (const id of data.memberIds) {
-        const m = member.guild.members.cache.get(id);
-        if (m && m.kickable) await m.kick('Anti-raid: possible raid').catch(() => {});
-      }
-    }
-
-    await lockdown(member.guild);
-    await logModAction(member.guild, '🚨 ANTI-RAID ACTIVATED', `Raid detected (${data.count} joins in ${windowMs / 1000}s). All channels locked down.\nAuto-unlock in ${Math.round(unlockAfterMs / 1000)}s.`, 'error');
-
-    setTimeout(async () => {
-      try {
-        await unlock(member.guild);
-        await logModAction(member.guild, '🔓 Raid Lockdown Lifted', 'All channels have been unlocked.', 'success');
-        raidCache.delete(member.guild.id);
-      } catch (_) {}
-    }, unlockAfterMs).unref();
+  // If a suspicious burst happened, just ALERT staff (no lockdown, no kicks of humans).
+  if (data.count >= maxJoins && !data.alerted) {
+    data.alerted = true;
+    console.log(`[ANTI-RAID] Join burst detected in ${member.guild.name} (${data.count} joins / ${windowMs / 1000}s)`);
+    await alertStaff(
+      member.guild,
+      '⚠️ Possible Raid Warning',
+      `**${data.count}** members joined in **${windowMs / 1000}s**. No members were removed or silenced.\n` +
+      `Bot accounts kicked: ${data.bots.size}.\n\n` +
+      `Members can still join, chat and react as normal. Please review the join logs and decide if manual action is needed.`,
+      'warn'
+    );
   }
 }
 
 // ─── Anti-Nuke ─────────────────────────────────────────────────
-
-// Discover the actor responsible for a destructive action via the audit log.
-async function findOffender(guild, auditEvent) {
-  try {
-    const { AuditLogEvent } = require('discord.js');
-    const entries = await guild.fetchAuditLogs({ type: auditEvent, limit: 5 }).catch(() => null);
-    if (!entries) return null;
-    const entry = entries.entries.find(e => Date.now() - e.createdTimestamp < 15000);
-    if (!entry || !entry.executor || entry.executor.bot) return null;
-    const member = await guild.members.fetch(entry.executor.id).catch(() => null);
-    return member || null;
-  } catch (_) {
-    return null;
-  }
-}
-
+// IMPORTANT: This NEVER locks the server. It detects destructive bursts
+// (mass channel/role deletes, mass bans) and ONLY alerts staff. If the actor
+// is a bot, that bot is timed out. Humans are never touched automatically.
 function getNukeCache(guildId) {
   if (!nukeCache.has(guildId)) {
-    nukeCache.set(guildId, { channelDeletes: 0, roleDeletes: 0, banKicks: 0, windowStart: Date.now(), locked: false });
+    nukeCache.set(guildId, { channelDeletes: 0, roleDeletes: 0, banKicks: 0, windowStart: Date.now(), alerted: false });
   }
   return nukeCache.get(guildId);
 }
 
-async function checkAntiNuke(guild, type, offender = null) {
+async function checkAntiNuke(guild, type) {
   const cfg = await GuildConfig.findOne({ guildId: guild.id });
   if (!cfg || !cfg.antiNukeEnabled) return false;
 
-  const { maxChannelDeletes = 3, maxRoleDeletes = 3, maxBanKicks = 5, windowMs = 10000, unlockAfterMs = 300000 } = config.antiNuke;
+  const { maxChannelDeletes = 3, maxRoleDeletes = 3, maxBanKicks = 5, windowMs = 10000 } = config.antiNuke;
 
   const data = getNukeCache(guild.id);
   const now = Date.now();
@@ -252,57 +252,71 @@ async function checkAntiNuke(guild, type, offender = null) {
     data.roleDeletes = 0;
     data.banKicks = 0;
     data.windowStart = now;
-    data.locked = false;
+    data.alerted = false;
   }
 
   data[type]++;
 
   const limits = { channelDeletes: maxChannelDeletes, roleDeletes: maxRoleDeletes, banKicks: maxBanKicks };
+  const typeLabel = { channelDeletes: 'channel deletions', roleDeletes: 'role deletions', banKicks: 'ban/kick actions' };
 
-  if (data[type] >= limits[type] && !data.locked) {
-    data.locked = true;
-    console.log(`[ANTI-NUKE] Nuke detected in ${guild.name}! Type: ${type}`);
+  if (data[type] >= limits[type] && !data.alerted) {
+    data.alerted = true;
+    console.log(`[ANTI-NUKE] Nuke burst detected in ${guild.name}! Type: ${type}`);
 
-    if (!offender) {
-      const { AuditLogEvent } = require('discord.js');
-      const eventMap = {
-        channelDeletes: AuditLogEvent.ChannelDelete,
-        roleDeletes: AuditLogEvent.RoleDelete,
-        banKicks: AuditLogEvent.MemberBanAdd,
-      };
-      offender = await findOffender(guild, eventMap[type]);
-    }
-
-    if (offender?.moderatable) {
+    // Only punish bots. Humans are left for staff to review.
+    const offender = await findOffender(guild, type);
+    let acted = false;
+    if (offender && offender.user?.bot && offender.moderatable) {
       await offender.timeout(600000, `Anti-nuke: ${type}`).catch(() => {});
+      acted = true;
     }
 
-    await lockdown(guild);
-    const offenderLabel = offender ? `**${offender.user.tag}** (\`${offender.id}\`)` : 'Unknown actor';
-    await logModAction(guild, '🚨 ANTI-NUKE ACTIVATED', `Nuke attempt detected (${type}: ${data[type]}). All channels locked down.\nOffender: ${offenderLabel}\nAuto-unlock in ${Math.round(unlockAfterMs / 1000)}s.`, 'error');
-
-    setTimeout(async () => {
-      try {
-        await unlock(guild);
-        await logModAction(guild, '🔓 Nuke Lockdown Lifted', 'All channels have been unlocked.', 'success');
-        nukeCache.delete(guild.id);
-      } catch (_) {}
-    }, unlockAfterMs).unref();
+    const actorLabel = offender ? `**${offender.user.tag}** (\`${offender.id}\`)` : 'Unknown actor';
+    await alertStaff(
+      guild,
+      '🚨 Possible Nuke Warning',
+      `Detected **${data[type]}** ${typeLabel[type]} in **${windowMs / 1000}s**.\n` +
+      `Actor: ${actorLabel}\n\n` +
+      `No channels were locked and no human members were affected.` +
+      (acted ? ` The bot actor was timed out.` : ` Please review the audit log and take manual action if needed.`),
+      'error'
+    );
 
     return true;
   }
   return false;
 }
 
-// ─── Manual lock / unlock (used by /antiraid) ──────────────────
+// Discover the actor responsible for a destructive action via the audit log.
+async function findOffender(guild, type) {
+  try {
+    const { AuditLogEvent } = require('discord.js');
+    const eventMap = {
+      channelDeletes: AuditLogEvent.ChannelDelete,
+      roleDeletes: AuditLogEvent.RoleDelete,
+      banKicks: AuditLogEvent.MemberBanAdd,
+    };
+    const entries = await guild.fetchAuditLogs({ type: eventMap[type], limit: 5 }).catch(() => null);
+    if (!entries) return null;
+    const entry = entries.entries.find(e => Date.now() - e.createdTimestamp < 15000);
+    if (!entry || !entry.executor) return null;
+    const member = await guild.members.fetch(entry.executor.id).catch(() => null);
+    return member || null;
+  } catch (_) {
+    return null;
+  }
+}
+
+// ─── Manual lock / unlock (used only by explicit /antiraid command) ──
 async function manualLockdown(guild, mod) {
   await lockdown(guild);
-  await logModAction(guild, '🔒 Manual Lockdown', `All channels locked by ${mod ? mod.user.tag : 'staff'}.`, 'warn');
+  await alertStaff(guild, '🔒 Manual Lockdown', `All channels locked by ${mod ? mod.user.tag : 'staff'} (manual command).`, 'warn');
 }
 
 async function manualUnlock(guild, mod) {
   await unlock(guild);
-  await logModAction(guild, '🔓 Channels Unlocked', `All channels unlocked by ${mod ? mod.user.tag : 'staff'}.`, 'success');
+  await alertStaff(guild, '🔓 Channels Unlocked', `All channels unlocked by ${mod ? mod.user.tag : 'staff'} (manual command).`, 'success');
 }
 
 module.exports = {
@@ -311,6 +325,7 @@ module.exports = {
   checkAntiNuke,
   detectBlockedScript,
   hasWeirdChars,
+  isSuspicious,
   manualLockdown,
   manualUnlock,
   lockdown,
