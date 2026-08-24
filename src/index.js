@@ -10,6 +10,33 @@ const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js'
 const chalk = require('chalk');
 const mongoose = require('mongoose');
 const config = require('./config');
+
+// ─── Startup guard: fail fast with a clear message if env vars are missing ───
+const missing = [];
+if (!config.token || typeof config.token !== 'string' || config.token.trim() === '') missing.push('TOKEN');
+if (!config.clientId || typeof config.clientId !== 'string' || config.clientId.trim() === '') missing.push('CLIENT_ID');
+if (!config.mongoUri || typeof config.mongoUri !== 'string' || config.mongoUri.trim() === '') missing.push('MONGODB_URI');
+if (missing.length > 0) {
+  console.error('');
+  console.error(chalk.red.bold('❌ Missing environment variable(s): ' + missing.join(', ')));
+  console.error(chalk.red('   The bot cannot start without these.'));
+  console.error('');
+  console.error('   👉 To fix: In Railway, open your service → Variables, then set:');
+  console.error('      • TOKEN        — your Discord bot token (Developer Portal → Bot → Token)');
+  console.error('      • CLIENT_ID    — your Discord Application ID (Developer Portal → General Information)');
+  console.error('      • MONGODB_URI  — your MongoDB Atlas connection string');
+  console.error('');
+  console.error('   After adding them, Railway will redeploy automatically.');
+  console.error('   TIP: NEVER paste your token in chat or code — only in Railway Variables.');
+  console.error('');
+  process.exit(1);
+}
+if (config.token.includes(' ') || config.token.includes('\n') || config.token.includes('\r')) {
+  console.error(chalk.red.bold('❌ TOKEN looks malformed (contains spaces/newlines).'));
+  console.error(chalk.red('   Check the Railway variable for accidental whitespace or quotes.'));
+  process.exit(1);
+}
+
 const { loadCommands } = require('./handlers/commandHandler');
 const { deployCommands } = require('./deploy-commands');
 
@@ -75,7 +102,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       giveaway.claimIGNs.set(interaction.user.id, ign);
       await giveaway.save();
 
-      // Send to claim IGNs channel with "Paid" button + prize amount
       try {
         const GuildConfig = require('./models/GuildConfig');
         const cfg = await GuildConfig.findOne({ guildId: interaction.guild.id });
@@ -118,7 +144,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
   // === GIVEAWAY BUTTONS ===
   if (interaction.isButton()) {
-    // --- Paid button ---
     if (interaction.customId.startsWith('giveaway_paid_')) {
       try {
         const parts = interaction.customId.replace('giveaway_paid_', '').split('_');
@@ -132,7 +157,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
           return interaction.reply({ content: 'Only the giveaway host can mark as paid!', flags: MessageFlags.Ephemeral });
         }
 
-        // DM the winner
         try {
           const member = await interaction.guild.members.fetch(winnerId).catch(() => null);
           if (member) {
@@ -163,7 +187,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
           }
         } catch (_) {}
 
-        // Update the claim embed
         if (interaction.message.embeds[0]) {
           const { EmbedBuilder } = require('discord.js');
           const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
@@ -179,7 +202,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // --- Claim button ---
     if (interaction.customId.startsWith('giveaway_claim_')) {
       try {
         const messageId = interaction.customId.replace('giveaway_claim_', '');
@@ -222,7 +244,6 @@ client.on(Events.InteractionCreate, async (interaction) => {
       return;
     }
 
-    // --- Enter button ---
     if (interaction.customId.startsWith('giveaway_enter_')) {
       try {
         const messageId = interaction.customId.replace('giveaway_enter_', '');
