@@ -26,22 +26,25 @@ module.exports = {
   // ─── Anti‑Abuse defaults ─────────────────
   antiSpam: {
     enabled: true,
-    maxMessages: 5,          // messages allowed in window
-    windowMs: 3000,          // time window (3 seconds)
-    muteDuration: 60000,     // 1 minute mute
-    ignoredRoles: [],        // role IDs to ignore
+    maxMessages: 5,            // messages allowed in window before timeout
+    windowMs: 3000,            // time window (3 seconds)
+    timeoutDurationMs: 600000, // 10 minute timeout for spam
+    blockForeignLanguages: true, // block non-Latin / foreign scripts
+    ignoredRoles: [],          // role IDs to ignore
   },
   antiRaid: {
     enabled: true,
-    maxJoins: 10,            // max users joining in window
-    windowMs: 10000,         // 10 second window
-    action: 'lockdown',      // 'lockdown' or 'kick'
+    maxJoins: 10,              // max users joining in window
+    windowMs: 10000,           // 10 second window
+    action: 'lockdown',        // 'lockdown' or 'kick'
+    unlockAfterMs: 300000,     // auto-unlock after 5 minutes
   },
   antiNuke: {
     enabled: true,
-    maxChannelDeletes: 3,     // per 10s window
+    maxChannelDeletes: 3,      // per 10s window
     maxRoleDeletes: 3,
     maxBanKicks: 5,
     windowMs: 10000,
+    unlockAfterMs: 300000,     // auto-unlock after 5 minutes
   },
 };
