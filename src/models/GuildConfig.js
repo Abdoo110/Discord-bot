@@ -32,6 +32,9 @@ const guildConfigSchema = new mongoose.Schema({
   antiRaidEnabled: { type: Boolean, default: true },
   antiNukeEnabled: { type: Boolean, default: true },
 
+  // When a command has entries here, those roles (plus the owner) are its only users.
+  commandRoles: { type: Map, of: [String], default: {} },
+
   prefix: { type: String, default: '!' },
 
   createdAt: { type: Date, default: Date.now },
