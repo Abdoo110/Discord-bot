@@ -9,7 +9,7 @@ module.exports = {
     .setDescription('Remove strikes from a member')
     .addUserOption(o => o.setName('target').setDescription('User to remove strikes from').setRequired(true))
     .addIntegerOption(o => o.setName('count').setDescription('Number of strikes to remove (default: 1)').setMinValue(1).setMaxValue(100))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
