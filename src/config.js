@@ -5,7 +5,10 @@ module.exports = {
   token: process.env.TOKEN,
   clientId: process.env.CLIENT_ID,
   mongoUri: process.env.MONGODB_URI,
-  botInvite: process.env.BOT_INVITE,
+  // Generate a reusable invite without locking it to one server.
+  botInvite: process.env.CLIENT_ID
+    ? `https://discord.com/oauth2/authorize?client_id=${encodeURIComponent(process.env.CLIENT_ID)}&permissions=8&scope=bot%20applications.commands`
+    : process.env.BOT_INVITE,
 
   // ─── Colors (for embeds) ─────────────────
   colors: {
