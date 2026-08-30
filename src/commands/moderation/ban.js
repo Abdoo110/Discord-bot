@@ -9,7 +9,7 @@ module.exports = {
     .addUserOption(o => o.setName('target').setDescription('User to ban').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason for the ban'))
     .addIntegerOption(o => o.setName('days').setDescription('Days of messages to delete (0-7)').setMinValue(0).setMaxValue(7))
-    .setDefaultMemberPermissions(PermissionFlagsBits.BanMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
