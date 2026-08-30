@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const staffSchema = new mongoose.Schema({
   guildId: { type: String, required: true },
-  userId: { type: String, required: true, unique: true },
+  userId: { type: String, required: true },
   ign: { type: String, default: null },
   timezone: { type: String, default: null },
   position: { type: String, default: 'Staff' },
@@ -15,6 +15,6 @@ const staffSchema = new mongoose.Schema({
   },
 });
 
-staffSchema.index({ guildId: 1, userId: 1 });
+staffSchema.index({ guildId: 1, userId: 1 }, { unique: true });
 
 module.exports = mongoose.model('Staff', staffSchema);
