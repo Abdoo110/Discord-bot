@@ -254,6 +254,14 @@ async function userReady(interaction) {
 async function openMessageModal(interaction, sender) {
   const prefix = sender === 'staff' ? 'order_msg_S_' : 'order_msg_U_';
   const orderId = interaction.customId.slice(prefix.length);
+  const order = await Order.findById(orderId);
+  if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
+  if (sender === 'staff' && !interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) {
+    return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
+  }
+  if (sender === 'user' && interaction.user.id !== order.userId) {
+    return interaction.reply({ content: 'This order message is not for you.', flags: MessageFlags.Ephemeral });
+  }
 
   const modal = new ModalBuilder()
     .setCustomId(`order_modal_msg_${sender}_${orderId}`)
@@ -261,7 +269,7 @@ async function openMessageModal(interaction, sender) {
 
   modal.addComponents(
     new ActionRowBuilder().addComponents(
-      new TextInputBuilder().setCustomId('message').setLabel('Type your message').setStyle(TextInputStyle.Paragraph).setRequired(true).setPlaceholder('Enter your message here...'),
+      new TextInputBuilder().setCustomId('message').setLabel('Type your message').setStyle(TextInputStyle.Paragraph).setRequired(true).setMaxLength(1000).setPlaceholder('Enter your message here...'),
     ),
   );
 
@@ -276,6 +284,12 @@ async function handleMessageSubmit(interaction) {
 
   const order = await Order.findById(orderId);
   if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
+  if (sender === 'staff' && !interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) {
+    return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
+  }
+  if (sender === 'user' && interaction.user.id !== order.userId) {
+    return interaction.reply({ content: 'This order message is not for you.', flags: MessageFlags.Ephemeral });
+  }
 
   const guild = interaction.guild || await interaction.client.guilds.fetch(order.guildId).catch(() => null);
   if (!guild) return interaction.reply({ content: 'Guild not found.', flags: MessageFlags.Ephemeral });
@@ -283,24 +297,64 @@ async function handleMessageSubmit(interaction) {
   const channel = guild.channels.cache.get(order.orderChannelId);
   if (!channel) return interaction.reply({ content: 'Orders channel not found.', flags: MessageFlags.Ephemeral });
 
+  if (sender === 'user') {
+    try {
+      await channel.send({
+        embeds: [new EmbedBuilder()
+          .setTitle('Customer Message')
+          .setDescription(message)
+          .addFields(
+            { name: 'Customer', value: `<@${order.userId}>`, inline: true },
+            { name: 'Order', value: `Type ${order.shulkerType} • ${order.quantity}`, inline: true },
+            { name: 'Order ID', value: order._id.toString(), inline: false },
+          )
+          .setColor('#5865F2').setTimestamp()
+        ],
+      });
+    } catch (err) {
+      console.error('[ORDER] Could not forward user message:', err.message);
+      return interaction.reply({ content: 'I could not send your message to staff. Please try again later.', flags: MessageFlags.Ephemeral });
+    }
+  }
+
   const orderMsg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
   if (!orderMsg) return interaction.reply({ content: 'Order message not found.', flags: MessageFlags.Ephemeral });
   if (!orderMsg.embeds[0]) return interaction.reply({ content: 'Embed missing from message.', flags: MessageFlags.Ephemeral });
 
   const oldDesc = EmbedBuilder.from(orderMsg.embeds[0]).data.description || '';
   const label = sender === 'staff' ? '\n**Staff:**' : `\n**${interaction.user.username}:**`;
-  const newEmbed = EmbedBuilder.from(orderMsg.embeds[0]).setDescription(oldDesc + `${label} ${message}`);
+  const historyEntry = `${label} ${message}`;
+  const maxDescriptionLength = 4096;
+  const newDescription = oldDesc.length + historyEntry.length <= maxDescriptionLength
+    ? oldDesc + historyEntry
+    : `${oldDesc.slice(0, Math.max(0, maxDescriptionLength - historyEntry.length - 32))}\n… Older messages truncated …${historyEntry}`;
+  let historyWarning = false;
+  try {
+    const newEmbed = EmbedBuilder.from(orderMsg.embeds[0]).setDescription(newDescription);
+    await orderMsg.edit({ embeds: [newEmbed], components: orderMsg.components });
+  } catch (err) {
+    console.error('[ORDER] Could not update order history:', err.message);
+    historyWarning = true;
+  }
 
-  await orderMsg.edit({ embeds: [newEmbed], components: orderMsg.components });
-
+  let deliveryWarning = false;
   if (sender === 'staff') {
     try {
       const user = await interaction.client.users.fetch(order.userId);
       await user.send(`**Staff:** ${message}`);
-    } catch (_) {}
+    } catch (_) {
+      deliveryWarning = true;
+    }
   }
 
-  await interaction.reply({ content: 'Message sent!', flags: MessageFlags.Ephemeral });
+  if (deliveryWarning) {
+    return interaction.reply({ content: historyWarning ? 'Message saved, but I could not DM the customer or update the order history.' : 'Message saved, but I could not DM the customer.', flags: MessageFlags.Ephemeral });
+  }
+  if (historyWarning) {
+    return interaction.reply({ content: sender === 'user' ? 'Message sent to staff, but the order history could not be updated.' : 'Message sent, but the order history could not be updated.', flags: MessageFlags.Ephemeral });
+  }
+
+  await interaction.reply({ content: sender === 'user' ? 'Message sent to staff!' : 'Message sent!', flags: MessageFlags.Ephemeral });
 }
 
 async function completeOrder(interaction, who) {
