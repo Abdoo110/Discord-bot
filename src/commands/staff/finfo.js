@@ -18,6 +18,13 @@ module.exports = {
       return error(interaction, '❌ Not Found', `${target.tag} is not registered as staff.`);
     }
 
+    const loaEndsAt = staff.loa?.endsAt ? new Date(staff.loa.endsAt) : null;
+    const loaActive = Boolean(staff.loa?.active && loaEndsAt && Number.isFinite(loaEndsAt.getTime()) && loaEndsAt.getTime() > Date.now());
+    if (staff.loa?.active && !loaActive) {
+      staff.loa.active = false;
+      await staff.save();
+    }
+
     await interaction.reply({ embeds: [
       buildEmbed({ color: 'staff', title: `📋 Staff Info — ${target.username}`, fields: [
         { name: 'Discord', value: target.tag, inline: true },
@@ -25,7 +32,7 @@ module.exports = {
         { name: 'Timezone', value: staff.timezone || 'Not set', inline: true },
         { name: 'Position', value: staff.position, inline: true },
         { name: 'Hired', value: `<t:${Math.floor(staff.hiredAt.getTime() / 1000)}:D>`, inline: true },
-        { name: 'LOA', value: staff.loa.active ? `🔴 On LOA until <t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>` : '🟢 Active', inline: false },
+        { name: 'LOA', value: loaActive ? `🔴 On LOA until <t:${Math.floor(loaEndsAt.getTime() / 1000)}:R>` : '🟢 Active (not on LOA)', inline: false },
       ], thumbnail: target.displayAvatarURL({ dynamic: true }) })
     ]});
   },
