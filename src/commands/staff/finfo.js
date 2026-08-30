@@ -32,7 +32,7 @@ module.exports = {
         { name: 'Timezone', value: staff.timezone || 'Not set', inline: true },
         { name: 'Position', value: staff.position, inline: true },
         { name: 'Hired', value: `<t:${Math.floor(staff.hiredAt.getTime() / 1000)}:D>`, inline: true },
-        { name: 'LOA', value: loaActive ? `🔴 On LOA until <t:${Math.floor(loaEndsAt.getTime() / 1000)}:R>` : '🟢 Active (not on LOA)', inline: false },
+        { name: 'LOA', value: loaActive ? `🟢 On LOA until <t:${Math.floor(loaEndsAt.getTime() / 1000)}:R>` : '🔴 Not on LOA', inline: false },
       ], thumbnail: target.displayAvatarURL({ dynamic: true }) })
     ]});
   },
