@@ -22,7 +22,7 @@ module.exports = {
         { name: '🎉 Giveaways', value: '`/gcreate` `/gend` `/greroll` `/gweekly`', inline: false },
         { name: '🤝 Partner System', value: '`/psetup` `/unpsetup` `/pleaderboard` `/resetpartners`', inline: false },
         { name: '⚡ Fun', value: '`/fast`', inline: false },
-        { name: '🔧 Utility', value: '`/commands` `!bugreport`', inline: false },
+        { name: '🔧 Utility', value: '`/commands` `/invite` `!bugreport`', inline: false },
       ],
       footer: `${interaction.guild.name} • Bot by Nexus`, timestamp: Date.now(),
     });
