@@ -39,6 +39,8 @@ if (config.token.includes(' ') || config.token.includes('\n') || config.token.in
 
 const { loadCommands } = require('./handlers/commandHandler');
 const { deployCommands } = require('./deploy-commands');
+const { getConfig } = require('./utils/guildConfig');
+const { hasCommandAccess, COMMAND_PERMISSIONS } = require('./utils/permissions');
 
 const client = new Client({
   intents: [
@@ -293,6 +295,19 @@ client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   const command = client.commands.get(interaction.commandName);
   if (!command) return;
+
+  if (COMMAND_PERMISSIONS[interaction.commandName]) {
+    const guildConfig = await getConfig(interaction.guild.id);
+    if (!hasCommandAccess(interaction.member, guildConfig, interaction.commandName)) {
+      const { buildEmbed } = require('./utils/embed');
+      return interaction.reply({ embeds: [buildEmbed({
+        color: 'error',
+        title: '⛔ Command Restricted',
+        description: 'Only the server owner or a role configured with /owner can use /' + interaction.commandName + '.',
+      })], flags: MessageFlags.Ephemeral });
+    }
+  }
+
   try {
     await command.execute(interaction);
   } catch (err) {
