@@ -7,7 +7,7 @@ module.exports = {
     .setName('clearwarnings')
     .setDescription('Clear all warnings for a member')
     .addUserOption(o => o.setName('target').setDescription('User to clear warnings for').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
