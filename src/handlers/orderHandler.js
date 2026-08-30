@@ -41,6 +41,11 @@ async function handleOrderInteraction(interaction) {
       return true;
     }
 
+    if (interaction.isButton() && interaction.customId.startsWith('order_payment_confirm_')) {
+      await confirmPayment(interaction);
+      return true;
+    }
+
     if (interaction.isButton() && interaction.customId.startsWith('order_paid_')) {
       await handlePaid(interaction);
       return true;
@@ -112,7 +117,7 @@ async function processOrder(interaction) {
           `**Total Price:** ${formatted}`,
           `**When:** ${whenNeeded}`,
           '',
-          `💳 **Pay half (${halfFormatted}) to \`hkgame4576\`**`,
+          `💳 **Pay half (${halfFormatted}) to \`.hkgame4576\`**`,
           `After paying, click the button below.`,
         ].join('\n'))
         .setColor('#5865F2').setTimestamp()
@@ -406,50 +411,112 @@ async function handlePaid(interaction) {
   const orderId = interaction.customId.slice('order_paid_'.length);
   const order = await Order.findById(orderId);
   if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
-  if (order.paid) return interaction.reply({ content: 'You already marked this as paid!', flags: MessageFlags.Ephemeral });
+  if (order.paid) return interaction.reply({ content: 'This payment has already been confirmed.', flags: MessageFlags.Ephemeral });
+  if (order.paymentClaimed) return interaction.reply({ content: 'Your payment is already waiting for staff confirmation.', flags: MessageFlags.Ephemeral });
+
+  const guild = await interaction.client.guilds.fetch(order.guildId).catch(() => null);
+  if (!guild) return interaction.reply({ content: 'Guild not found. Please contact staff.', flags: MessageFlags.Ephemeral });
+
+  const cfg = await GuildConfig.findOne({ guildId: order.guildId });
+  const paidChannelId = cfg?.channels?.orderPaidChannel;
+  const paidChannel = paidChannelId ? guild.channels.cache.get(paidChannelId) : null;
+  if (!paidChannel) return interaction.reply({ content: 'The payment confirmation channel is not configured or is unavailable. Please contact staff.', flags: MessageFlags.Ephemeral });
+
+  const halfPrice = order.totalPrice / 2;
+  const halfFormatted = formatPrice(halfPrice);
+  const confirmBtn = new ButtonBuilder()
+    .setCustomId(`order_payment_confirm_${order._id}`)
+    .setLabel('Confirm')
+    .setStyle(ButtonStyle.Success);
+
+  await paidChannel.send({
+    embeds: [new EmbedBuilder()
+      .setTitle('Half Payment Pending Confirmation')
+      .setDescription(`<@${order.userId}> says they paid the required half payment.`)
+      .addFields(
+        { name: 'Customer', value: `<@${order.userId}>`, inline: true },
+        { name: 'Shulker Type', value: `Type ${order.shulkerType}`, inline: true },
+        { name: 'Quantity', value: `${order.quantity}`, inline: true },
+        { name: 'Half Payment', value: halfFormatted, inline: true },
+        { name: 'Full Price', value: order.formattedPrice, inline: true },
+        { name: 'When Needed', value: order.whenNeeded || 'Not specified', inline: true },
+        { name: 'Order ID', value: order._id.toString(), inline: false },
+      )
+      .setColor('#FEE75C')
+      .setFooter({ text: 'Verify payment sent to .hkgame4576, then press Confirm' })
+      .setTimestamp()
+    ],
+    components: [new ActionRowBuilder().addComponents(confirmBtn)],
+  });
+
+  order.paymentClaimed = true;
+  await order.save();
+
+  if (interaction.message) {
+    await interaction.message.edit({ components: [] }).catch(() => {});
+  }
+
+  await interaction.reply({ content: `Payment claim submitted for **${halfFormatted}**. Staff will verify it.`, flags: MessageFlags.Ephemeral });
+}
+
+async function confirmPayment(interaction) {
+  if (!interaction.member?.permissions?.has(PermissionFlagsBits.ManageEvents)) {
+    return interaction.reply({ content: 'No permission.', flags: MessageFlags.Ephemeral });
+  }
+
+  const orderId = interaction.customId.slice('order_payment_confirm_'.length);
+  const order = await Order.findById(orderId);
+  if (!order) return interaction.reply({ content: 'Order not found.', flags: MessageFlags.Ephemeral });
+  if (order.paid) return interaction.reply({ content: 'This payment has already been confirmed.', flags: MessageFlags.Ephemeral });
+  if (!order.paymentClaimed) return interaction.reply({ content: 'This order has no pending payment claim.', flags: MessageFlags.Ephemeral });
 
   order.paid = true;
   await order.save();
 
-  const halfPrice = order.totalPrice / 2;
-  const halfFormatted = formatPrice(halfPrice);
+  let userNotified = true;
+  try {
+    const user = await interaction.client.users.fetch(order.userId);
+    await user.send({
+      embeds: [new EmbedBuilder()
+        .setTitle('Payment Confirmed')
+        .setDescription(`Your half payment of **${formatPrice(order.totalPrice / 2)}** for your order has been confirmed. Your order can now continue processing.`)
+        .setColor('#57F287').setTimestamp()
+      ],
+    });
+  } catch (_) {
+    userNotified = false;
+  }
 
-  const guild = await interaction.client.guilds.fetch(order.guildId).catch(() => null);
-  if (guild) {
-    const cfg = await GuildConfig.findOne({ guildId: order.guildId });
-    if (cfg?.channels?.orderPaidChannel) {
-      const channel = guild.channels.cache.get(cfg.channels.orderPaidChannel);
-      if (channel) {
-        await channel.send({
-          embeds: [new EmbedBuilder()
-            .setTitle('💰 Payment Received!')
-            .setDescription(`<@${order.userId}> has paid you **${halfFormatted}**`)
-            .addFields(
-              { name: '👤 Customer', value: `<@${order.userId}>`, inline: true },
-              { name: '💎 Shulker Type', value: `Type ${order.shulkerType}`, inline: true },
-              { name: '📦 Quantity', value: `${order.quantity}`, inline: true },
-              { name: '💵 Half Payment', value: halfFormatted, inline: true },
-              { name: '💰 Full Price', value: order.formattedPrice, inline: true },
-              { name: '⏰ When Needed', value: order.whenNeeded || 'Not specified', inline: true },
-              { name: '🔑 Order ID', value: order._id.toString(), inline: false },
-            )
-            .setColor('#57F287')
-            .setFooter({ text: `Paid to hkgame4576 • Verify before processing` })
-            .setTimestamp()
-          ],
-        });
+  try {
+    const guild = interaction.guild || await interaction.client.guilds.fetch(order.guildId).catch(() => null);
+    const channel = guild?.channels.cache.get(order.orderChannelId);
+    if (channel) {
+      const msg = await channel.messages.fetch(order.orderMessageId).catch(() => null);
+      if (msg?.embeds[0]) {
+        const currentDescription = EmbedBuilder.from(msg.embeds[0]).data.description || '';
+        const confirmationLine = '\n\n✅ Half payment confirmed by staff.';
+        const description = currentDescription.includes(confirmationLine.trim())
+          ? currentDescription
+          : `${currentDescription}${confirmationLine}`.slice(0, 4096);
+        const emb = EmbedBuilder.from(msg.embeds[0])
+          .setDescription(description)
+          .setColor('#57F287');
+        await msg.edit({ embeds: [emb], components: msg.components });
       }
     }
+  } catch (err) {
+    console.error('[ORDER] Could not update original order after payment confirmation:', err.message);
   }
 
-  if (interaction.message.embeds[0]) {
-    const oldEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
-    const desc = (oldEmbed.data.description || '') + `\n\n✅ **Payment of ${halfFormatted} marked!** Staff will verify.`;
-    oldEmbed.setDescription(desc).setColor('#57F287');
-    await interaction.message.edit({ embeds: [oldEmbed], components: [] });
+  if (interaction.message?.embeds[0]) {
+    const emb = EmbedBuilder.from(interaction.message.embeds[0])
+      .setTitle('Half Payment Confirmed')
+      .setDescription(`Half payment of **${formatPrice(order.totalPrice / 2)}** confirmed by ${interaction.user.tag}.`)
+      .setColor('#57F287')
+      .setFooter({ text: `Order ID: ${order._id} | Payment confirmed` });
+    await interaction.message.edit({ embeds: [emb], components: [] }).catch(() => {});
   }
 
-  await interaction.reply({ content: `✅ Payment of **${halfFormatted}** claimed! Staff will verify and process your order.`, flags: MessageFlags.Ephemeral });
+  await interaction.reply({ content: userNotified ? 'Payment confirmed. The user has been notified. The normal order buttons remain available.' : 'Payment confirmed, but I could not DM the user. The normal order buttons remain available.', flags: MessageFlags.Ephemeral });
 }
-
 module.exports = { handleOrderInteraction };
