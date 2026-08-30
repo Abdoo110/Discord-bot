@@ -8,7 +8,7 @@ module.exports = {
     .addChannelOption(o => o.setName('channel').setDescription('Channel to unlock (defaults to current)').addChannelTypes(ChannelType.GuildText))
     .addStringOption(o => o.setName('reason').setDescription('Reason for unlocking'))
     .setDMPermission(false)
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageChannels),
+    .setDefaultMemberPermissions(0),
 
   async execute(interaction) {
     const channel = interaction.options.getChannel('channel') || interaction.channel;
