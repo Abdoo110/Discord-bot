@@ -28,13 +28,20 @@ module.exports = {
 
     if (!staff) return error(interaction, '❌ Not Staff', 'You are not registered as staff.');
 
+    const loaEndsAt = staff.loa?.endsAt ? new Date(staff.loa.endsAt) : null;
+    const loaActive = Boolean(staff.loa?.active && loaEndsAt && Number.isFinite(loaEndsAt.getTime()) && loaEndsAt.getTime() > Date.now());
+    if (staff.loa?.active && !loaActive) {
+      staff.loa.active = false;
+      await staff.save();
+    }
+
     if (sub === 'set') {
       const reason = interaction.options.getString('reason');
       const durStr = interaction.options.getString('duration');
       const durMs = ms(durStr);
 
       if (!durMs || durMs < 3600000) return error(interaction, '❌ Error', 'Minimum LOA duration is 1 hour.');
-      if (staff.loa.active) return error(interaction, '❌ Error', 'You already have an active LOA.');
+      if (loaActive) return error(interaction, '❌ Error', 'You already have an active LOA.');
 
       staff.loa = {
         active: true,
@@ -55,14 +62,14 @@ module.exports = {
           logChannel.send({ embeds: [buildEmbed({ color: 'info', title: '🔴 Staff LOA', fields: [
             { name: 'Staff', value: `${interaction.user.tag}`, inline: true },
             { name: 'Reason', value: reason, inline: true },
-            { name: 'Returns', value: `<t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>`, inline: true },
+            { name: 'Returns', value: `<t:${Math.floor(loaEndsAt.getTime() / 1000)}:R>`, inline: true },
           ], timestamp: Date.now() })] });
         }
       }
     }
 
     if (sub === 'cancel') {
-      if (!staff || !staff.loa.active) return error(interaction, '❌ Error', 'You do not have an active LOA.');
+      if (!loaActive) return error(interaction, '❌ Error', 'You do not have an active LOA.');
 
       staff.loa.active = false;
       await staff.save();
@@ -70,7 +77,7 @@ module.exports = {
     }
 
     if (sub === 'status') {
-      if (staff.loa.active) {
+      if (loaActive) {
         await interaction.reply({ embeds: [buildEmbed({ color: 'info', title: '🔴 LOA Status', fields: [
             { name: 'Status', value: '🔴 On LOA', inline: true },
             { name: 'Reason', value: staff.loa.reason, inline: true },
@@ -79,8 +86,8 @@ module.exports = {
         ]})] });
       } else {
         await interaction.reply({ embeds: [buildEmbed({ color: 'info',
-            title: 'LOA Status',
-            description: '🔴 Not on LOA' })] });
+            title: '🟢 LOA Status',
+            description: '🟢 Active (not on LOA)' })] });
       }
     }
   },
