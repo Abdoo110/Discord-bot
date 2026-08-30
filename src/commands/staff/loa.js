@@ -51,7 +51,7 @@ module.exports = {
       };
       await staff.save();
 
-      await success(interaction, '🔴 LOA Set',
+      await success(interaction, '🟢 LOA Set',
         `**User:** ${interaction.user.tag}\n**Reason:** ${reason}\n**Returns:** <t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>`);
 
       // Log
@@ -59,7 +59,7 @@ module.exports = {
       if (cfg?.channels?.staffLogs) {
         const logChannel = interaction.guild.channels.cache.get(cfg.channels.staffLogs);
         if (logChannel) {
-          logChannel.send({ embeds: [buildEmbed({ color: 'info', title: '🔴 Staff LOA', fields: [
+          logChannel.send({ embeds: [buildEmbed({ color: 'info', title: '🟢 Staff LOA', fields: [
             { name: 'Staff', value: `${interaction.user.tag}`, inline: true },
             { name: 'Reason', value: reason, inline: true },
             { name: 'Returns', value: `<t:${Math.floor(loaEndsAt.getTime() / 1000)}:R>`, inline: true },
@@ -78,16 +78,16 @@ module.exports = {
 
     if (sub === 'status') {
       if (loaActive) {
-        await interaction.reply({ embeds: [buildEmbed({ color: 'info', title: '🔴 LOA Status', fields: [
-            { name: 'Status', value: '🔴 On LOA', inline: true },
+        await interaction.reply({ embeds: [buildEmbed({ color: 'info', title: '🟢 LOA Status', fields: [
+            { name: 'Status', value: '🟢 On LOA', inline: true },
             { name: 'Reason', value: staff.loa.reason, inline: true },
             { name: 'Started', value: `<t:${Math.floor(staff.loa.startedAt.getTime() / 1000)}:R>`, inline: true },
             { name: 'Returns', value: `<t:${Math.floor(staff.loa.endsAt.getTime() / 1000)}:R>`, inline: true },
         ]})] });
       } else {
         await interaction.reply({ embeds: [buildEmbed({ color: 'info',
-            title: '🟢 LOA Status',
-            description: '🟢 Active (not on LOA)' })] });
+            title: '🔴 LOA Status',
+            description: '🔴 Not on LOA' })] });
       }
     }
   },
