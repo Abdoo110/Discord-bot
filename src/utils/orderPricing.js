@@ -7,7 +7,7 @@ const numberWords = {
   hundred: 100,
 };
 
-const PRICES = { 1: 1945000, 2: 4320000 };
+const PRICES = Object.freeze({ 1: 4999000, 2: 8999000 });
 
 function parseQuantity(input) {
   if (!input) return 0;
