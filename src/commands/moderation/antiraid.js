@@ -26,7 +26,7 @@ module.exports = {
     .addSubcommand(sub => sub
       .setName('unlock')
       .setDescription('Manually unlock all channels'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ManageGuild)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
