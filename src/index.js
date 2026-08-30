@@ -9,6 +9,7 @@ require('dotenv').config();
 const { Client, GatewayIntentBits, Events, MessageFlags } = require('discord.js');
 const chalk = require('chalk');
 const mongoose = require('mongoose');
+const Staff = require('./models/Staff');
 const config = require('./config');
 
 // ─── Startup guard: fail fast with a clear message if env vars are missing ───
@@ -57,6 +58,15 @@ mongoose.set('strictQuery', false);
 async function connectDB() {
   try {
     await mongoose.connect(config.mongoUri);
+
+    // Migrate the old global userId index to a guild-scoped staff index.
+    const indexes = await Staff.collection.indexes();
+    const legacyUserIndex = indexes.find(index => index.unique && index.key?.userId === 1 && !index.key?.guildId);
+    if (legacyUserIndex?.name) {
+      await Staff.collection.dropIndex(legacyUserIndex.name);
+    }
+    await Staff.syncIndexes();
+
     console.log(chalk.green('Connected to MongoDB'));
   } catch (err) {
     console.error(chalk.red('MongoDB connection error:'), err.message);
