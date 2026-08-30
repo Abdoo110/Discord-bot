@@ -8,7 +8,7 @@ module.exports = {
     .setDescription('Kick a member from the server')
     .addUserOption(o => o.setName('target').setDescription('User to kick').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason for the kick'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.KickMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
