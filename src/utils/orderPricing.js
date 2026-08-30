@@ -34,10 +34,15 @@ function calculatePrice(shulkerType, quantity) {
   return { total, formatted, unitPrice, quantity: qty };
 }
 
+function formatCompact(value, suffix) {
+  const rounded = Math.round((value + Number.EPSILON) * 1000) / 1000;
+  return rounded.toFixed(3).replace(/\.?0+$/, '') + suffix;
+}
+
 function formatPrice(n) {
-  if (n >= 1000000000) return (n / 1000000000).toFixed(3).replace(/\.?0+$/, '') + 'B';
-  if (n >= 1000000) return (n / 1000000).toFixed(3).replace(/\.?0+$/, '') + 'M';
-  if (n >= 1000) return (n / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+  if (n >= 1000000000) return formatCompact(n / 1000000000, 'B');
+  if (n >= 1000000) return formatCompact(n / 1000000, 'M');
+  if (n >= 1000) return (Math.round((n / 1000 + Number.EPSILON) * 10) / 10).toFixed(1).replace(/\.0$/, '') + 'K';
   return n.toLocaleString();
 }
 
