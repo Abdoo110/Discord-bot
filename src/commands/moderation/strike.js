@@ -9,7 +9,7 @@ module.exports = {
     .setDescription('Issue a strike/warning to a member')
     .addUserOption(o => o.setName('target').setDescription('User to strike').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason for strike').setRequired(true))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
