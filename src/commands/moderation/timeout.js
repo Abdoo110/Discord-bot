@@ -10,7 +10,7 @@ module.exports = {
     .addUserOption(o => o.setName('target').setDescription('User to timeout').setRequired(true))
     .addStringOption(o => o.setName('duration').setDescription('Duration (e.g. 10m, 1h, 1d)').setRequired(true))
     .addStringOption(o => o.setName('reason').setDescription('Reason for timeout'))
-    .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
+    .setDefaultMemberPermissions(0)
     .setDMPermission(false),
 
   async execute(interaction) {
